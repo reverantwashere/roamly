@@ -19,7 +19,7 @@ Roamly lets a signed-in person add and verify a mobile number from **Travel prof
 1. In **Authentication → Providers → Phone**, enable phone authentication.
 2. Configure one supported SMS provider in that screen. Keep the provider credentials in Supabase; never add them to the repository or a `VITE_` environment variable.
 3. For an India launch, complete any sender registration and template requirements your provider requires, including TRAI DLT registration where applicable.
-4. Deploy the site, sign in with email, open **Travel profile**, and verify a test number using its international form, such as `+919876543210`.
+4. Deploy the site, sign in with email, open **Travel profile**, choose any supported country or territory, and verify a test number.
 
 The verified number is stored in Supabase Auth and is not added to Roamly's public profile data. Supabase rate-limits repeated code requests, so wait before using **Resend code** again.
 

@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback, type FormEvent } from "react";
 import {
+  getCountries,
+  getCountryCallingCode,
+  parsePhoneNumberFromString,
+  type CountryCode,
+} from "libphonenumber-js";
+import {
   ArrowDownToLine,
   ArrowRight,
   ArrowUpRight,
@@ -81,6 +87,16 @@ type ModalType =
   | "deleteTrip"
   | "deleteVehicle"
   | null;
+
+const phoneRegionNames = new Intl.DisplayNames(["en"], { type: "region" });
+const phoneCountries = getCountries()
+  .map((country) => ({
+    country,
+    name: phoneRegionNames.of(country) || country,
+    callingCode: getCountryCallingCode(country),
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+
 const navItems: {
   id: Page;
   label: string;
@@ -2063,7 +2079,18 @@ function ProfilePage({
   );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [phone, setPhone] = useState(user.phone || "+91");
+  const initialPhone = user.phone
+    ? parsePhoneNumberFromString(user.phone)
+    : undefined;
+  const [phoneCountry, setPhoneCountry] = useState<CountryCode>(
+    initialPhone?.country || "IN",
+  );
+  const [phoneNationalNumber, setPhoneNationalNumber] = useState(
+    initialPhone?.nationalNumber || "",
+  );
+  const [phoneForVerification, setPhoneForVerification] = useState(
+    user.phone || "",
+  );
   const [phoneCode, setPhoneCode] = useState("");
   const [phoneStage, setPhoneStage] = useState<
     "entry" | "code" | "verified"
@@ -2072,8 +2099,12 @@ function ProfilePage({
   const [phoneError, setPhoneError] = useState("");
   async function sendPhoneCode() {
     setPhoneError("");
-    if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
-      setPhoneError("Use the international format, for example +919876543210.");
+    const parsedPhone = parsePhoneNumberFromString(
+      phoneNationalNumber,
+      phoneCountry,
+    );
+    if (!parsedPhone?.isValid()) {
+      setPhoneError("Enter a valid mobile number for the selected country.");
       return;
     }
     if (!supabase) {
@@ -2082,8 +2113,12 @@ function ProfilePage({
     }
     setPhoneBusy(true);
     try {
-      const { error } = await supabase.auth.updateUser({ phone });
+      const normalizedPhone = parsedPhone.number;
+      const { error } = await supabase.auth.updateUser({
+        phone: normalizedPhone,
+      });
       if (error) throw error;
+      setPhoneForVerification(normalizedPhone);
       setPhoneStage("code");
       notify("Verification code sent by SMS.");
     } catch (e) {
@@ -2105,7 +2140,7 @@ function ProfilePage({
     setPhoneBusy(true);
     try {
       const { error } = await supabase.auth.verifyOtp({
-        phone,
+        phone: phoneForVerification,
         token: phoneCode,
         type: "phone_change",
       });
@@ -2428,13 +2463,18 @@ function ProfilePage({
                   <>
                     <div className="verified-phone">
                       <ShieldCheck size={16} />
-                      {user.phone || phone}
+                      {parsePhoneNumberFromString(
+                        user.phone || phoneForVerification,
+                      )?.formatInternational() ||
+                        user.phone ||
+                        phoneForVerification}
                     </div>
                     <button
                       type="button"
                       className="text-button"
                       onClick={() => {
-                        setPhone("+91");
+                        setPhoneNationalNumber("");
+                        setPhoneCode("");
                         setPhoneStage("entry");
                         setPhoneError("");
                       }}
@@ -2444,19 +2484,41 @@ function ProfilePage({
                   </>
                 ) : phoneStage === "entry" ? (
                   <>
-                    <input
-                      type="tel"
-                      inputMode="tel"
-                      autoComplete="tel"
-                      value={phone}
-                      onChange={(e) =>
-                        setPhone(e.target.value.replace(/[^+\d]/g, ""))
-                      }
-                      placeholder="+919876543210"
-                      aria-label="Mobile number in international format"
-                    />
+                    <div className="phone-number-fields">
+                      <select
+                        value={phoneCountry}
+                        onChange={(e) => {
+                          setPhoneCountry(e.target.value as CountryCode);
+                          setPhoneError("");
+                        }}
+                        aria-label="Country calling code"
+                      >
+                        {phoneCountries.map((option) => (
+                          <option
+                            key={option.country}
+                            value={option.country}
+                          >
+                            {option.name} (+{option.callingCode})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel-national"
+                        value={phoneNationalNumber}
+                        onChange={(e) =>
+                          setPhoneNationalNumber(
+                            e.target.value.replace(/\D/g, ""),
+                          )
+                        }
+                        placeholder="Mobile number"
+                        aria-label="Mobile number without country code"
+                      />
+                    </div>
                     <p className="tiny-muted">
-                      Include the country code. Indian numbers start with +91.
+                      Choose any country or territory, then enter the number
+                      without its country code.
                     </p>
                     <button
                       type="button"
@@ -2473,7 +2535,7 @@ function ProfilePage({
                 ) : (
                   <>
                     <p className="tiny-muted">
-                      Enter the 6-digit code sent to {phone}.
+                      Enter the 6-digit code sent to {phoneForVerification}.
                     </p>
                     <input
                       type="text"

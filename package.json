@@ -17,6 +17,7 @@
     "express": "^5.1.0",
     "jose": "^6.2.12",
     "leaflet": "^1.9.4",
+    "libphonenumber-js": "^1.13.13",
     "lucide-react": "^0.468.0",
     "otpauth": "^9.5.2",
     "qrcode": "^1.5.4",
