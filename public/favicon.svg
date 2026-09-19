@@ -1,1 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="12" fill="#315c45"/><path d="M12 28 20 10l8 18-8-5z" fill="#e6edc5"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+  <title>Roamly</title>
+  <rect x="2.5" y="2.5" width="35" height="35" rx="12" fill="#345d46" transform="rotate(-8 20 20)" />
+  <svg x="8" y="9" width="24" height="22" viewBox="0 0 24 24" fill="#e7efca" stroke="#e7efca" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="3 11 22 2 13 21 11 13 3 11" />
+  </svg>
+</svg>
