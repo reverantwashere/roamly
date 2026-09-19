@@ -39,7 +39,7 @@ import {
   Waves,
   X,
 } from "lucide-react";
-import { destinations, type Destination } from "./lib/data";
+import { destinations, distanceFromHometown, keralaHometowns, type Destination } from "./lib/data";
 import { remainingRange } from "./lib/planner";
 import {
   api,
@@ -101,8 +101,6 @@ const categoryOptions = [
   { name: "Culture", icon: Globe2 },
   { name: "Coast", icon: Waves },
 ];
-const heroImage =
-  "https://images.unsplash.com/photo-1491497895121-1334fc14d8c9?auto=format&fit=crop&w=1800&q=85";
 function IconBox({
   icon: Icon,
   color = "sage",
@@ -290,7 +288,11 @@ function App() {
     profile.name?.split(" ")[0] || user.name?.split(" ")[0] || "traveller";
   const vehicle = vehicles[0];
   const upcoming = trips.find((t) => t.status?.toLowerCase() !== "completed");
-  const personalizedPlaces = [...destinations].sort((a, b) => {
+  const nearbyPlaces = destinations.map((place) => ({
+    ...place,
+    distanceKm: distanceFromHometown(profile.city, place),
+  })).sort((a, b) => (a.distanceKm ?? Number.MAX_VALUE) - (b.distanceKm ?? Number.MAX_VALUE));
+  const personalizedPlaces = [...nearbyPlaces].sort((a, b) => {
     const score = (p: Destination) =>
       p.personality.filter(
         (style) => style.toLowerCase() === profile.personality.toLowerCase(),
@@ -303,10 +305,11 @@ function App() {
             tag.toLowerCase().includes(interest.toLowerCase()),
           ),
       ).length;
-    return score(b) - score(a);
+    const proximity = (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999);
+    return Math.abs(proximity) < 25 ? score(b) - score(a) : proximity;
   });
   const matchedPlaces = (
-    category === "For you" ? personalizedPlaces : destinations
+    category === "For you" ? personalizedPlaces : nearbyPlaces
   ).filter(
     (p) =>
       (category === "For you" || p.category === category) &&
@@ -315,6 +318,7 @@ function App() {
           .toLowerCase()
           .includes(search.toLowerCase())),
   );
+  const featuredPlace = personalizedPlaces[0] || destinations[0];
   const interests = profile.interests?.length
     ? profile.interests
     : ["Nature", "Culture"];
@@ -488,17 +492,7 @@ function App() {
               {locationOpen && (
                 <div className="location-dropdown" role="listbox" aria-label="Choose your Kerala location">
                   <span>YOUR AREA</span>
-                  {[
-                    "Thiruvananthapuram", "Neyyattinkara", "Attingal",
-                    "Kollam", "Punalur", "Pathanamthitta", "Adoor",
-                    "Alappuzha", "Cherthala", "Kottayam", "Pala",
-                    "Kochi", "Aluva", "Perumbavoor", "Muvattupuzha",
-                    "Thrissur", "Guruvayur", "Irinjalakuda", "Palakkad",
-                    "Ottapalam", "Malappuram", "Manjeri", "Tirur",
-                    "Kozhikode", "Vadakara", "Kalpetta", "Mananthavady",
-                    "Kannur", "Thalassery", "Kasaragod", "Kanhangad",
-                    "Thodupuzha", "Kattappana", "Munnar",
-                  ].map((city) => (
+                  {keralaHometowns.map(([city]) => (
                     <button key={city} role="option" aria-selected={profile.city === city} onClick={() => chooseLocation(city)}>
                       <MapPin size={13} />
                       {city}
@@ -554,7 +548,7 @@ function App() {
                 <section
                   className="hero"
                   style={{
-                    backgroundImage: `linear-gradient(90deg, rgba(18,39,32,.79) 0%,rgba(20,47,37,.46) 45%,rgba(20,47,37,.02) 100%),url(${heroImage})`,
+                    backgroundImage: `linear-gradient(90deg, rgba(18,39,32,.79) 0%,rgba(20,47,37,.46) 45%,rgba(20,47,37,.02) 100%),url(${featuredPlace.image})`,
                   }}
                 >
                   <div className="hero-content">
@@ -585,7 +579,7 @@ function App() {
                   </div>
                   <span className="hero-location">
                     <MapPin size={13} />
-                    Munnar, Kerala
+                    {featuredPlace.name}, Kerala
                   </span>
                   <span className="hero-pagination">
                     <b />
