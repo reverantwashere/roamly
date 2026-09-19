@@ -38,6 +38,36 @@ export function createHostedApi(supabase: SupabaseClient) {
     throw new Error("code" in error && error.code === "P0001" && error.message ? error.message : fallback);
   }
 
+  let authRefreshInFlight: Promise<boolean> | null = null;
+  let authRefreshVersion = 0;
+
+  async function readWithAuthRetry<T extends { status?: number }>(read: () => PromiseLike<T>): Promise<T> {
+    const startedAtVersion = authRefreshVersion;
+    const result = await read();
+    if (result.status !== 401) return result;
+
+    // A rejected read may recover with a refreshed session. This does not
+    // establish why the service rejected it; persistent errors still surface.
+    if (authRefreshVersion === startedAtVersion) {
+      if (!authRefreshInFlight) {
+        authRefreshInFlight = (async () => {
+          try {
+            const { data, error } = await supabase.auth.refreshSession();
+            if (error || !data.session) return false;
+            authRefreshVersion += 1;
+            return true;
+          } catch {
+            return false;
+          }
+        })().finally(() => { authRefreshInFlight = null; });
+      }
+      if (!(await authRefreshInFlight)) return result;
+    }
+    // Rebuild the read so Supabase attaches its current JWT. Never retry a
+    // mutation or recurse on another 401, and never turn this into guest data.
+    return await read();
+  }
+
   async function currentSupabaseUser() {
     if (!supabase) throw new Error("Supabase is not configured.");
     const { data, error } = await supabase.auth.getUser();
@@ -51,10 +81,10 @@ export function createHostedApi(supabase: SupabaseClient) {
     const rows: EntityRow[] = [];
     const pageSize = 500;
     for (let offset = 0; ; offset += pageSize) {
-      const { data, error } = await supabase.from("entities")
+      const { data, error } = await readWithAuthRetry(() => supabase.from("entities")
         .select("id, kind, data, created_at").eq("user_id", userId)
         .order("created_at", { ascending: true }).order("id", { ascending: true })
-        .range(offset, offset + pageSize - 1);
+        .range(offset, offset + pageSize - 1));
       databaseError(error, "Your Roamly data could not be loaded. Please try again.");
       rows.push(...(data || []) as EntityRow[]);
       if (!data || data.length < pageSize) return rows;
@@ -63,13 +93,13 @@ export function createHostedApi(supabase: SupabaseClient) {
 
   async function getEntity(userId: string, kind: EntityKind, id: string) {
     if (!supabase) throw new Error("Supabase is not configured.");
-    const { data, error } = await supabase
+    const { data, error } = await readWithAuthRetry(() => supabase
       .from("entities")
       .select("id, kind, data, created_at")
       .eq("user_id", userId)
       .eq("kind", kind)
       .eq("id", id)
-      .maybeSingle();
+      .maybeSingle());
     databaseError(error, "That item could not be loaded. Please try again.");
     if (!data) throw new Error("That item could not be found.");
     return entityData(data as EntityRow);
@@ -120,7 +150,7 @@ export function createHostedApi(supabase: SupabaseClient) {
         } as T;
       }
       const [{ data: row, error: profileError }, entities] = await Promise.all([
-        supabase.from("profiles").select("name, profile").eq("id", user.id).maybeSingle(),
+        readWithAuthRetry(() => supabase.from("profiles").select("name, profile").eq("id", user.id).maybeSingle()),
         allEntities(user.id),
       ]);
       databaseError(profileError, "Your travel profile could not be loaded. Please try again.");
@@ -144,11 +174,11 @@ export function createHostedApi(supabase: SupabaseClient) {
 
     if (path === "/profile" && requestMethod === "PUT") {
       const user = await currentSupabaseUser();
-      const { data: current, error: readError } = await supabase
+      const { data: current, error: readError } = await readWithAuthRetry(() => supabase
         .from("profiles")
         .select("profile")
         .eq("id", user.id)
-        .maybeSingle();
+        .maybeSingle());
       databaseError(readError, "Your travel profile could not be loaded. Please try again.");
       const input = record(body);
       const name = input.name ?? record(current?.profile).name ?? user.user_metadata.name ?? "Traveller";

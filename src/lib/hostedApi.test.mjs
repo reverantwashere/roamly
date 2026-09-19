@@ -5,10 +5,12 @@ import { createHostedApi } from './hostedApi.ts';
 const alice = { id: 'alice', email: 'alice@example.test', user_metadata: { name: 'Alice' } };
 const vehicle = { name: 'My car', type: 'Car', fuelType: 'Petrol', tankCapacity: 45, mileage: 20, odometer: 1000, fuelLevel: 50 };
 const trip = { destination: 'Munnar', country: 'India', image: '/images/munnar.webp', startDate: '2026-09-20', days: 3, people: 2, budget: 5000, currency: 'INR', itinerary: [] };
-function client({ user = alice, authError = null, rows = [], profiles = [], rpcResult = null, rpcError = null } = {}) {
+function client({ user = alice, authError = null, rows = [], profiles = [], rpcResult = null, rpcError = null, readOverride, refreshImpl, writeError = null } = {}) {
   const calls = [], tables = { entities: structuredClone(rows), profiles: structuredClone(profiles) };
+  const readCounts = {};
   const auth = {
     async getUser() { return { data: { user }, error: authError }; },
+    async refreshSession() { calls.push(['refreshSession']); return refreshImpl ? await refreshImpl() : { data: { session: { user } }, error: null }; },
     async signOut(options) { calls.push(['signOut', options]); return { error: null }; },
   };
   function from(table) {
@@ -24,10 +26,14 @@ function client({ user = alice, authError = null, rows = [], profiles = [], rpcR
         try {
           if (write) {
             calls.push(['upsert', table, write]);
+            if (writeError) return Promise.resolve({ data: null, error: writeError, status: 401 }).then(resolve, reject);
             const old = tables[table].findIndex((row) => row.id === write.id);
             if (old >= 0) tables[table][old] = structuredClone(write); else tables[table].push(structuredClone(write));
             return Promise.resolve({ data: null, error: failure }).then(resolve, reject);
           }
+          readCounts[table] = (readCounts[table] || 0) + 1;
+          const overridden = readOverride?.(table, readCounts[table]);
+          if (overridden) return Promise.resolve(overridden).then(resolve, reject);
           let data = tables[table].filter((row) => filters.every(([key, value]) => row[key] === value));
           if (page) data = data.slice(page[0], page[1] + 1);
           return Promise.resolve({ data: single ? data[0] || null : data, error: failure }).then(resolve, reject);
@@ -36,7 +42,7 @@ function client({ user = alice, authError = null, rows = [], profiles = [], rpcR
     };
     return query;
   }
-  return { auth, from, calls, tables, async rpc(name, args) { calls.push(['rpc', name, args]); return { data: rpcResult, error: rpcError }; } };
+  return { auth, from, calls, tables, readCounts, async rpc(name, args) { calls.push(['rpc', name, args]); return { data: rpcResult, error: rpcError }; } };
 }
 
 const entity = (id, kind, data, owner = 'alice') => ({ id, kind, data, user_id: owner, created_at: '2026-09-19T00:00:00Z' });
@@ -65,6 +71,72 @@ test('sessions load all owned records beyond one API page and use database IDs',
   assert.equal(session.profile.personality, 'Ambivert');
   assert.deepEqual(session.savedPlaces, ['munnar']);
   assert.ok(fake.calls.some(([kind, offset]) => kind === 'range' && offset === 500));
+});
+
+const unauthorized = { status: 401, data: null, error: { code: 'PGRST301', message: 'Request is not authorized' } };
+
+test('a rejected data read refreshes auth once and reloads with the fresh session', async () => {
+  let refreshed = false;
+  const fake = client({
+    rows: [entity('car', 'vehicles', vehicle)],
+    readOverride: (table) => table === 'entities' && !refreshed ? unauthorized : null,
+    refreshImpl: async () => { refreshed = true; return { data: { session: { user: alice } }, error: null }; },
+  });
+  const session = await createHostedApi(fake)('/session');
+  assert.equal(session.user.isGuest, false);
+  assert.equal(session.vehicles[0].id, 'car');
+  assert.equal(fake.readCounts.entities, 2);
+  assert.equal(fake.calls.filter(([kind]) => kind === 'refreshSession').length, 1);
+});
+
+test('concurrent unauthorized profile and entity reads share one session refresh', async () => {
+  const fake = client({
+    readOverride: (_table, count) => count === 1 ? unauthorized : null,
+    refreshImpl: async () => { await new Promise((resolve) => setTimeout(resolve, 5)); return { data: { session: { user: alice } }, error: null }; },
+  });
+  assert.equal((await createHostedApi(fake)('/session')).user.isGuest, false);
+  assert.deepEqual(fake.readCounts, { profiles: 2, entities: 2 });
+  assert.equal(fake.calls.filter(([kind]) => kind === 'refreshSession').length, 1);
+});
+
+test('persistent unauthorized reads reject after one retry instead of returning empty or guest data', async () => {
+  const fake = client({ readOverride: (table) => table === 'entities' ? unauthorized : null });
+  await assert.rejects(createHostedApi(fake)('/session'), /Roamly data could not be loaded/);
+  assert.equal(fake.readCounts.entities, 2);
+  assert.equal(fake.calls.filter(([kind]) => kind === 'refreshSession').length, 1);
+});
+
+test('failed or missing refreshed sessions preserve the initial read failure without retrying', async () => {
+  for (const refreshImpl of [
+    async () => ({ data: { session: null }, error: { message: 'Refresh rejected' } }),
+    async () => ({ data: { session: null }, error: null }),
+    async () => { throw new Error('Network failure'); },
+  ]) {
+    const fake = client({ readOverride: (table) => table === 'entities' ? unauthorized : null, refreshImpl });
+    await assert.rejects(createHostedApi(fake)('/session'), /Roamly data could not be loaded/);
+    assert.equal(fake.readCounts.entities, 1);
+    assert.equal(fake.calls.filter(([kind]) => kind === 'refreshSession').length, 1);
+  }
+});
+
+test('entity lookup and profile update reads recover once while their mutations run only once', async () => {
+  const fake = client({ rows: [entity('car', 'vehicles', vehicle)], readOverride: (_table, count) => count === 1 ? unauthorized : null });
+  const api = createHostedApi(fake);
+  assert.equal((await api('/vehicles/car', { name: 'Updated' }, 'PATCH')).vehicle.name, 'Updated');
+  assert.equal((await api('/profile', { name: 'Alice' }, 'PUT')).profile.name, 'Alice');
+  assert.deepEqual(fake.readCounts, { entities: 2, profiles: 2 });
+  assert.equal(fake.calls.filter(([kind]) => kind === 'upsert').length, 2);
+  const failedWrite = client({ writeError: unauthorized.error });
+  await assert.rejects(createHostedApi(failedWrite)('/vehicles', vehicle), /changes could not be saved/);
+  assert.equal(failedWrite.calls.filter(([kind]) => kind === 'upsert').length, 1);
+  assert.equal(failedWrite.calls.filter(([kind]) => kind === 'refreshSession').length, 0);
+});
+
+test('non-auth read errors surface without refreshing or retrying', async () => {
+  const fake = client({ readOverride: (table) => table === 'entities' ? { ...unauthorized, status: 403 } : null });
+  await assert.rejects(createHostedApi(fake)('/session'), /Roamly data could not be loaded/);
+  assert.equal(fake.readCounts.entities, 1);
+  assert.equal(fake.calls.filter(([kind]) => kind === 'refreshSession').length, 0);
 });
 
 test('hosted entity validation rejects impossible quantities before any write', async () => {

@@ -33,11 +33,27 @@ test('hosted database enforces ownership and atomic account operations', async (
       $$;
       grant usage on schema public, auth to authenticated, anon;
     `)
-    for (const name of ['202609190001_roamly.sql', '202609190002_account_delete_rpc.sql', '202609190003_atomic_account_data.sql']) {
+    for (const name of ['202609190001_roamly.sql', '202609190002_account_delete_rpc.sql', '202609190003_atomic_account_data.sql', '202609190004_authenticated_table_access.sql']) {
       await db.exec(await readFile(new URL(`../../supabase/migrations/${name}`, import.meta.url), 'utf8'))
     }
-    await db.exec('grant select, insert, update, delete on public.entities, public.profiles to authenticated;')
     await db.query('insert into auth.users(id, email) values($1, $2), ($3, $4)', [alice, 'alice@example.test', bob, 'bob@example.test'])
+
+    await t.test('deployment migrations grant authenticated CRUD without fixture table grants', async () => {
+      for (const table of ['profiles', 'entities']) {
+        for (const permission of ['select', 'insert', 'update', 'delete']) {
+          const result = await db.query('select has_table_privilege($1, $2, $3) as permitted', ['authenticated', `public.${table}`, permission])
+          assert.equal(result.rows[0].permitted, true, `authenticated lacks ${permission} on ${table}`)
+          const anonymous = await db.query('select has_table_privilege($1, $2, $3) as permitted', ['anon', `public.${table}`, permission])
+          assert.equal(anonymous.rows[0].permitted, false, `migration granted anonymous ${permission} on ${table}`)
+        }
+        const security = await db.query('select relrowsecurity from pg_class where oid = $1::regclass', [`public.${table}`])
+        assert.equal(security.rows[0].relrowsecurity, true, `${table} must retain RLS`)
+      }
+      await asUser(alice)
+      // Exact column/filter/order shape used when a signed-in app loads /session.
+      assert.deepEqual((await db.query('select id, kind, data, created_at from public.entities where user_id = $1 order by created_at, id limit 500', [alice])).rows, [])
+      assert.equal((await db.query('select name, profile from public.profiles where id = $1', [alice])).rows.length, 1)
+    })
 
     await t.test('RLS and saved-place toggles keep accounts separate', async () => {
       await asUser(alice)
