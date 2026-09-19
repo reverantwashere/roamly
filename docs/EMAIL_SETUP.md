@@ -4,6 +4,8 @@ Roamly verifies a new password account by sending a six-digit code to its email 
 
 For the hosted Supabase and Cloudflare build, set the **Confirm sign up** template subject to `Your Roamly verification code` and paste [`supabase/templates/confirm-signup.html`](../supabase/templates/confirm-signup.html) into the Supabase template source editor. The template uses `{{ .Token }}` so the app can verify the six-digit code rather than requiring a confirmation link. Configure custom SMTP before a public beta; Supabase's default sender is limited to testing with authorized team addresses.
 
+Set the **Reset password** template subject to `Reset your Roamly password` and paste [`supabase/templates/recovery.html`](../supabase/templates/recovery.html) into its source editor. The recovery template uses `{{ .ConfirmationURL }}`. After the user follows that link, Roamly handles Supabase's `PASSWORD_RECOVERY` event, opens the new-password form, updates the password, and signs out the temporary recovery session.
+
 Email is also available as the second step after a primary sign-in. Authenticator apps and recovery codes remain separate security options. Phone verification is deferred: a phone number is not required for signup and no SMS is sent.
 
 ## Development

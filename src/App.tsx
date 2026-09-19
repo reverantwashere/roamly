@@ -62,6 +62,7 @@ import {
 } from "./lib/data";
 import { hasIntentExpansion, intentScore } from "./lib/search";
 import { remainingRange } from "./lib/planner";
+import { supabase } from "./lib/supabase";
 import {
   api,
   currencies,
@@ -85,6 +86,7 @@ import {
   FuelModal,
   FuelCalculator,
   ErrorMessage,
+  type AuthMode,
 } from "./components/Forms";
 
 type ModalType =
@@ -180,14 +182,17 @@ function EmptyState({
   );
 }
 function App() {
+  const initialAuthMode = (() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has("resetToken") || params.get("recovery") === "password"
+      ? "reset"
+      : undefined;
+  })() as AuthMode | undefined;
   const [session, setSession] = useState<Session | null>(null);
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState<Page>("home");
-  const [modal, setModal] = useState<ModalType>(
-    new URLSearchParams(window.location.search).has("resetToken")
-      ? "auth"
-      : null,
-  );
+  const [modal, setModal] = useState<ModalType>(initialAuthMode ? "auth" : null);
+  const [authMode, setAuthMode] = useState<AuthMode | undefined>(initialAuthMode);
   const [selectedPlace, setSelectedPlace] = useState<Destination>();
   const [selectedTrip, setSelectedTrip] = useState<Trip>();
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle>();
@@ -220,6 +225,16 @@ function App() {
   useEffect(() => {
     refresh().catch(() => {});
   }, [refresh]);
+  useEffect(() => {
+    if (!supabase) return;
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setAuthMode("reset");
+        setModal("auth");
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
   useEffect(() => {
     if (session && !session.user.isGuest && session.profile.onboarded !== true && modal === null) {
       setModal("onboarding");
@@ -1912,8 +1927,20 @@ function App() {
       )}
       {modal === "auth" && (
         <AuthModal
-          onClose={closeModal}
+          key={authMode || "default"}
+          initialMode={authMode}
+          onClose={() => {
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete("resetToken");
+            cleanUrl.searchParams.delete("recovery");
+            cleanUrl.searchParams.delete("code");
+            cleanUrl.hash = "";
+            window.history.replaceState({}, "", cleanUrl);
+            setAuthMode(undefined);
+            closeModal();
+          }}
           onSuccess={(s) => {
+            setAuthMode(undefined);
             setSession(s);
             if (s.profile.onboarded === true) {
               closeModal();
