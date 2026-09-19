@@ -65,7 +65,7 @@ export interface Expense {
   [key: string]: unknown;
 }
 export interface Session {
-  user: { id: string; name: string; email: string; isGuest: boolean };
+  user: { id: string; name: string; email: string; isGuest: boolean; phone?: string; phoneVerified?: boolean };
   profile: Profile;
   trips: Trip[];
   vehicles: Vehicle[];
@@ -95,7 +95,7 @@ export async function api<T = any>(
     const user = data.user;
     if (!user) {
       return {
-        user: { id: "guest", name: "Traveller", email: "", isGuest: true },
+        user: { id: "guest", name: "Traveller", email: "", isGuest: true, phoneVerified: false },
         profile: {
           name: "Traveller", city: "Kochi", country: "India", currency: "INR",
           personality: "Peace-seeking", interests: ["Nature", "Culture"], group: "Couple",
@@ -106,7 +106,7 @@ export async function api<T = any>(
     }
     const { data: row } = await supabase.from("profiles").select("name, profile").eq("id", user.id).maybeSingle();
     return {
-      user: { id: user.id, name: row?.name || user.user_metadata.name || "Traveller", email: user.email || "", isGuest: false },
+      user: { id: user.id, name: row?.name || user.user_metadata.name || "Traveller", email: user.email || "", isGuest: false, phone: user.phone || "", phoneVerified: Boolean(user.phone_confirmed_at) },
       profile: { name: row?.name || user.user_metadata.name || "Traveller", city: "Kochi", country: "India", currency: "INR", personality: "Peace-seeking", interests: ["Nature", "Culture"], group: "Couple", transport: "Car", budget: "Balanced", language: "English", notifications: {}, visibility: "Private", ...(row?.profile || {}) },
       trips: [], vehicles: [], expenses: [], savedPlaces: [],
     } as T;

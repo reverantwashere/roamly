@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { destinations, distanceFromHometown, keralaHometowns, type Destination } from "./lib/data";
 import { remainingRange } from "./lib/planner";
+import { supabase } from "./lib/supabase";
 import {
   api,
   currencies,
@@ -2062,6 +2063,62 @@ function ProfilePage({
   );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [phone, setPhone] = useState(user.phone || "+91");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneStage, setPhoneStage] = useState<
+    "entry" | "code" | "verified"
+  >(user.phoneVerified ? "verified" : "entry");
+  const [phoneBusy, setPhoneBusy] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+  async function sendPhoneCode() {
+    setPhoneError("");
+    if (!/^\+[1-9]\d{7,14}$/.test(phone)) {
+      setPhoneError("Use the international format, for example +919876543210.");
+      return;
+    }
+    if (!supabase) {
+      setPhoneError("Mobile verification is unavailable right now.");
+      return;
+    }
+    setPhoneBusy(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ phone });
+      if (error) throw error;
+      setPhoneStage("code");
+      notify("Verification code sent by SMS.");
+    } catch (e) {
+      setPhoneError((e as Error).message);
+    } finally {
+      setPhoneBusy(false);
+    }
+  }
+  async function verifyPhoneCode() {
+    setPhoneError("");
+    if (!/^\d{6}$/.test(phoneCode)) {
+      setPhoneError("Enter the 6-digit SMS code.");
+      return;
+    }
+    if (!supabase) {
+      setPhoneError("Mobile verification is unavailable right now.");
+      return;
+    }
+    setPhoneBusy(true);
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        phone,
+        token: phoneCode,
+        type: "phone_change",
+      });
+      if (error) throw error;
+      setPhoneStage("verified");
+      await onSaved();
+      notify("Mobile number verified.");
+    } catch (e) {
+      setPhoneError((e as Error).message);
+    } finally {
+      setPhoneBusy(false);
+    }
+  }
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -2357,6 +2414,117 @@ function ProfilePage({
                 ? "Create an account to keep your guest journeys, vehicle, and saved places together."
                 : user.email}
             </p>
+            {!user.isGuest && (
+              <div className="phone-verification">
+                <div className="phone-verification-heading">
+                  <span>Mobile number</span>
+                  {phoneStage === "verified" && (
+                    <small>
+                      <Check size={12} /> Verified
+                    </small>
+                  )}
+                </div>
+                {phoneStage === "verified" ? (
+                  <>
+                    <div className="verified-phone">
+                      <ShieldCheck size={16} />
+                      {user.phone || phone}
+                    </div>
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => {
+                        setPhone("+91");
+                        setPhoneStage("entry");
+                        setPhoneError("");
+                      }}
+                    >
+                      Change mobile number
+                    </button>
+                  </>
+                ) : phoneStage === "entry" ? (
+                  <>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      value={phone}
+                      onChange={(e) =>
+                        setPhone(e.target.value.replace(/[^+\d]/g, ""))
+                      }
+                      placeholder="+919876543210"
+                      aria-label="Mobile number in international format"
+                    />
+                    <p className="tiny-muted">
+                      Include the country code. Indian numbers start with +91.
+                    </p>
+                    <button
+                      type="button"
+                      className="button secondary full"
+                      onClick={sendPhoneCode}
+                      disabled={phoneBusy}
+                    >
+                      {phoneBusy && (
+                        <LoaderCircle size={15} className="spin" />
+                      )}{" "}
+                      Send verification code
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="tiny-muted">
+                      Enter the 6-digit code sent to {phone}.
+                    </p>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={phoneCode}
+                      onChange={(e) =>
+                        setPhoneCode(
+                          e.target.value.replace(/\D/g, "").slice(0, 6),
+                        )
+                      }
+                      placeholder="000000"
+                      aria-label="SMS verification code"
+                    />
+                    <button
+                      type="button"
+                      className="button primary full"
+                      onClick={verifyPhoneCode}
+                      disabled={phoneBusy || phoneCode.length !== 6}
+                    >
+                      {phoneBusy && (
+                        <LoaderCircle size={15} className="spin" />
+                      )}{" "}
+                      Verify mobile number
+                    </button>
+                    <div className="phone-verification-actions">
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={sendPhoneCode}
+                        disabled={phoneBusy}
+                      >
+                        Resend code
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() => {
+                          setPhoneStage("entry");
+                          setPhoneCode("");
+                          setPhoneError("");
+                        }}
+                      >
+                        Use a different number
+                      </button>
+                    </div>
+                  </>
+                )}
+                <ErrorMessage error={phoneError} />
+              </div>
+            )}
             {user.isGuest ? (
               <button
                 type="button"
