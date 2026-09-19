@@ -43,6 +43,8 @@ Create a Pages project from `reverantwashere/roamly` and use:
 
 Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in **Settings → Environment variables** for both Production and Preview. These values are intentionally public client configuration. Never put `service_role`, email-provider, Google, or Apple secrets in Cloudflare Pages variables beginning with `VITE_`.
 
+`npm run build` verifies that the configured Supabase auth service can be reached with the supplied key before creating the bundle. Incorrect URLs, incomplete configuration, mismatched keys, and unreachable projects stop the build with a credential-free error. Production and Preview have separate values; check both environments and trigger a new build after changing either. Builds without either variable remain available for the local Express app.
+
 Cloudflare Pages will deploy preview builds for pull requests and production builds for `main`. GitHub Pages can serve the same static `dist` folder, but Pages is preferred because its preview URLs make OAuth redirect testing and passkey-origin configuration much easier.
 
 ## 3. Before making the beta public

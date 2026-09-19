@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k \"node --watch server/index.js\" \"vite --host 0.0.0.0\"",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/check-hosted-config.mjs && tsc -b && vite build",
     "start": "NODE_ENV=production node server/index.js",
-    "test": "node --test server/*.test.js src/lib/*.test.mjs",
+    "test": "node --test server/*.test.js src/lib/*.test.mjs scripts/*.test.mjs",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
