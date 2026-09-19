@@ -488,7 +488,17 @@ function App() {
               {locationOpen && (
                 <div className="location-dropdown" role="listbox" aria-label="Choose your Kerala location">
                   <span>YOUR AREA</span>
-                  {["Kochi", "Thiruvananthapuram", "Kozhikode", "Thrissur", "Munnar"].map((city) => (
+                  {[
+                    "Thiruvananthapuram", "Neyyattinkara", "Attingal",
+                    "Kollam", "Punalur", "Pathanamthitta", "Adoor",
+                    "Alappuzha", "Cherthala", "Kottayam", "Pala",
+                    "Kochi", "Aluva", "Perumbavoor", "Muvattupuzha",
+                    "Thrissur", "Guruvayur", "Irinjalakuda", "Palakkad",
+                    "Ottapalam", "Malappuram", "Manjeri", "Tirur",
+                    "Kozhikode", "Vadakara", "Kalpetta", "Mananthavady",
+                    "Kannur", "Thalassery", "Kasaragod", "Kanhangad",
+                    "Thodupuzha", "Kattappana", "Munnar",
+                  ].map((city) => (
                     <button key={city} role="option" aria-selected={profile.city === city} onClick={() => chooseLocation(city)}>
                       <MapPin size={13} />
                       {city}
