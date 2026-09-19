@@ -68,6 +68,7 @@ import { remainingRange } from "./lib/planner";
 import { supabase } from "./lib/supabase";
 import { signOutAndLoadGuest } from "./lib/sessionRecovery";
 import { useTheme } from "./lib/useTheme";
+import { tripImage } from "./lib/photos";
 import ThemeSwitcher from "./components/ThemeSwitcher";
 import {
   api,
@@ -999,7 +1000,7 @@ function App() {
                           onClick={() => openTrip(upcoming)}
                         >
                           <img
-                            src={upcoming.image || destinations[1].image}
+                            src={tripImage(upcoming) || destinations[1].image}
                             alt={upcoming.destination}
                           />
                           <div>
@@ -1491,7 +1492,7 @@ function App() {
                         onClick={() => openTrip(trip)}
                       >
                         <img
-                          src={trip.image || destinations[0].image}
+                          src={tripImage(trip) || destinations[0].image}
                           alt={trip.destination}
                         />
                         <span className="tag white">
@@ -2047,6 +2048,14 @@ function App() {
               </div>
             </div>
           )}
+          <footer className="photo-credit">
+            Kochi skyline photo: {" "}
+            <a href="https://commons.wikimedia.org/wiki/File:Kochi_Skyline.jpg" target="_blank" rel="noreferrer">
+              Fsquares (The Ibrahims)
+            </a>{" · "}
+            <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a>
+            {" · Cropped to fit."}
+          </footer>
         </main>
         {user.isGuest && (
           <div className="guest-bar">
@@ -2242,7 +2251,7 @@ function App() {
         >
           <div className="plan-summary">
             <img
-              src={selectedTrip.image || destinations[0].image}
+              src={tripImage(selectedTrip) || destinations[0].image}
               alt={selectedTrip.destination}
             />
             <div>

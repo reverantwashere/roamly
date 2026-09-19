@@ -72,6 +72,14 @@ html[data-theme="dark"] {
   --shadow-color: #00000040;
 }
 
+.photo-credit {
+  margin-top: 32px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.photo-credit a { color: inherit; }
+
 html[data-theme="dark"] ::selection {
   color: var(--selection-text);
   background: var(--selection-surface);

@@ -1,3 +1,5 @@
+import { KOCHI_CITY_IMAGE } from "./photos.ts";
+
 export type DestinationCategory =
   "Nature" | "Adventure" | "Culture" | "Coast" | "City";
 export type CrowdLevel = "Low" | "Moderate" | "High";
@@ -505,8 +507,7 @@ export const destinations: Destination[] = [
     district: "Ernakulam",
     description:
       "Contemporary cafés, galleries, waterfront neighbourhoods, and Kerala’s widest urban mix.",
-    image:
-      "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=1200&q=85",
+    image: KOCHI_CITY_IMAGE,
     category: "City",
     tags: ["Modern", "Cafés", "Nightlife"],
     personality: ["Extrovert", "Social", "Ambivert"],
