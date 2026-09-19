@@ -10,7 +10,18 @@ Roamly will use Supabase for both user accounts and application data. Cloudflare
 4. In **Authentication → Providers**, enable Email, Google, and Apple. Email confirmation should stay enabled. Configure Google and Apple in their provider consoles with Supabase's callback URL.
 5. In **Authentication → Passkeys**, enable passkeys and set the relying-party ID and allowed origins for the final Pages domain. Do not change the relying-party ID after people have enrolled a passkey.
 
-For the beta, the default second factor should be email confirmation. Supabase also supports optional authenticator-app (TOTP) MFA; phone verification can be enabled later after an SMS provider is chosen.
+For the beta, the default second factor should be email confirmation. Supabase also supports optional authenticator-app (TOTP) MFA.
+
+### Enable mobile-number verification
+
+Roamly lets a signed-in person add and verify a mobile number from **Travel profile → Your account**. Before SMS codes can be sent:
+
+1. In **Authentication → Providers → Phone**, enable phone authentication.
+2. Configure one supported SMS provider in that screen. Keep the provider credentials in Supabase; never add them to the repository or a `VITE_` environment variable.
+3. For an India launch, complete any sender registration and template requirements your provider requires, including TRAI DLT registration where applicable.
+4. Deploy the site, sign in with email, open **Travel profile**, and verify a test number using its international form, such as `+919876543210`.
+
+The verified number is stored in Supabase Auth and is not added to Roamly's public profile data. Supabase rate-limits repeated code requests, so wait before using **Resend code** again.
 
 ## 2. Configure Cloudflare Pages
 
@@ -31,5 +42,5 @@ Cloudflare Pages will deploy preview builds for pull requests and production bui
 
 - Replace the temporary `pages.dev` address with the final beta hostname before people register passkeys.
 - Add that exact HTTPS origin to Supabase's redirect and passkey settings.
-- Test email confirmation, Google, Apple, password reset, and TOTP on the deployed preview URL.
+- Test email confirmation, Google, Apple, password reset, mobile verification, and TOTP on the deployed preview URL.
 - Keep Row Level Security enabled. The migration creates owner-only policies for every Roamly record.
