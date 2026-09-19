@@ -4,6 +4,8 @@ A nature-inspired travel companion launching in **India, with Kerala as the beta
 
 The initial catalogue and example journeys focus on Kerala, with Indian rupee defaults. The interface is currently in English. This is a regional product beta, not a complete live travel service for every Indian state.
 
+Use the sun/moon button in the header to choose Light, Dark, or Device setting. Roamly follows the device setting on the first visit and remembers an explicit choice in this browser, including before the app loads. Theme preferences do not require an account.
+
 ## Run locally
 
 Use Node.js 24 LTS and npm.
