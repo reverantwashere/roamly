@@ -13,7 +13,7 @@ Roamly uses Supabase for hosted user accounts and application data. Cloudflare P
 3. In **Authentication → URL Configuration**, add your local address and the Cloudflare Pages production and preview URLs as redirect URLs.
 4. In **Authentication → Providers**, enable Email and keep email confirmation enabled. Google, Apple, and passkeys are optional future integrations; the current signup dialog uses email and password.
 
-### Use a six-digit signup code
+### Use an email signup code
 
 In **Authentication → Emails → Templates → Confirm sign up**:
 
@@ -21,7 +21,7 @@ In **Authentication → Emails → Templates → Confirm sign up**:
 2. Switch to the template source editor and paste the contents of [`supabase/templates/confirm-signup.html`](../supabase/templates/confirm-signup.html).
 3. Save the template and keep **Confirm email** enabled.
 
-The `{{ .Token }}` variable in that template is required. It replaces the confirmation link with the six-digit code that Roamly verifies in the signup dialog. For public beta delivery, configure custom SMTP; Supabase's default sender is intended only for testing and restricts recipients and send volume.
+The `{{ .Token }}` variable in that template is required. It replaces the confirmation link with the verification code that Roamly verifies in the signup dialog. Supabase controls the email OTP length; Roamly accepts its supported range of 6–10 digits, including eight-digit codes. Keep the template wording independent of the configured length. Updating the template file in Git does not update the hosted template: paste and save it in Supabase as described above. For public beta delivery, configure custom SMTP; Supabase's default sender is intended only for testing and restricts recipients and send volume.
 
 In **Authentication → Emails → Templates → Reset password**, set the subject to `Reset your Roamly password` and paste the contents of [`supabase/templates/recovery.html`](../supabase/templates/recovery.html). The template must keep `{{ .ConfirmationURL }}` so the link creates the temporary recovery session used by the new-password screen.
 
