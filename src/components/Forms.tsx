@@ -19,6 +19,7 @@ import {
 import Modal from "./Modal";
 import { destinations, type Destination } from "../lib/data";
 import { buildItinerary, fuelCost } from "../lib/planner";
+import { supabase } from "../lib/supabase";
 import {
   api,
   currencies,
@@ -59,22 +60,45 @@ export function AuthModal({
     const data = Object.fromEntries(new FormData(e.currentTarget));
     try {
       if (mode === "forgot") {
-        const result = await api("/auth/forgot-password", data);
-        setNotice(
-          result.message ||
-            "If that account exists, reset instructions have been prepared.",
-        );
+        if (supabase) {
+          const { error } = await supabase.auth.resetPasswordForEmail(String(data.email), { redirectTo: window.location.origin });
+          if (error) throw error;
+          setNotice("If that account exists, password reset instructions are on their way.");
+        } else {
+          const result = await api("/auth/forgot-password", data);
+          setNotice(result.message || "If that account exists, reset instructions have been prepared.");
+        }
       } else if (mode === "reset") {
-        await api("/auth/reset-password", data);
+        if (!supabase) throw new Error("Authentication is still being configured.");
+        const { error } = await supabase.auth.updateUser({ password: String(data.password) });
+        if (error) throw error;
         const cleanUrl = new URL(window.location.href);
         cleanUrl.searchParams.delete("resetToken");
         window.history.replaceState({}, "", cleanUrl);
         setMode("login");
         setNotice("Password updated. Sign in with your new password.");
       } else {
-        const result = await api<Session>(`/auth/${mode}`, data);
-        onSuccess(result);
-        onClose();
+        if (!supabase) {
+          const result = await api<Session>(`/auth/${mode}`, data);
+          onSuccess(result);
+          onClose();
+        } else if (mode === "signup") {
+          const { data: signedUp, error } = await supabase.auth.signUp({
+            email: String(data.email), password: String(data.password),
+            options: { data: { name: String(data.name) }, emailRedirectTo: window.location.origin },
+          });
+          if (error) throw error;
+          if (!signedUp.session) {
+            setNotice("Check your email to confirm your Roamly account, then sign in.");
+            setMode("login");
+          } else {
+            onSuccess(await api<Session>("/session")); onClose();
+          }
+        } else {
+          const { error } = await supabase.auth.signInWithPassword({ email: String(data.email), password: String(data.password) });
+          if (error) throw error;
+          onSuccess(await api<Session>("/session")); onClose();
+        }
       }
     } catch (err) {
       setError((err as Error).message);
