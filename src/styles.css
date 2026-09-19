@@ -3662,6 +3662,16 @@ label > small {
   color: #5f835b;
 }
 .phone-verification input { margin: 0; background: #fff; }
+.phone-number-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.phone-number-fields select,
+.phone-number-fields input {
+  width: 100%;
+  min-width: 0;
+}
 .phone-verification .form-error { margin: 0; }
 .phone-verification .tiny-muted { margin: 0; line-height: 1.5; }
 .phone-verification-actions {
@@ -3679,6 +3689,7 @@ label > small {
 @media (max-width: 600px) {
   .onboarding-step { min-height: 360px; }
   .onboarding-choices button { padding: 10px 12px; }
+  .phone-number-fields { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
   .topbar {
