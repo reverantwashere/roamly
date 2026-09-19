@@ -212,11 +212,13 @@ export function createHostedApi(supabase: SupabaseClient) {
       }
       if ((requestMethod === "POST" && !id) || (requestMethod === "PATCH" && id)) {
         const existing = id ? await getEntity(user.id, kind, id) : undefined;
-        const input = validateEntity(kind, { ...existing, ...record(body) });
+        const patch = record(body);
+        const input = validateEntity(kind, { ...existing, ...patch });
+        const fuelInputsChanged = ["vehicleId", "distanceKm", "fuelPricePerLitre", "currency"]
+          .some((field) => Object.hasOwn(patch, field) && input[field] !== existing?.[field]);
         if (kind === "expenses" && input.tripId) await getEntity(user.id, "trips", String(input.tripId));
         if (kind === "trips" && input.vehicleId) {
-          const unchanged = existing && ["vehicleId", "distanceKm", "fuelPricePerLitre", "currency"].every((field) => input[field] === existing[field]);
-          if (unchanged && existing.fuelEstimate) input.fuelEstimate = existing.fuelEstimate;
+          if (existing?.fuelEstimate && !fuelInputsChanged) input.fuelEstimate = existing.fuelEstimate;
           else {
             const vehicle = await getEntity(user.id, "vehicles", String(input.vehicleId));
             const distanceKm = Number(input.distanceKm), price = input.fuelPricePerLitre;
@@ -228,6 +230,9 @@ export function createHostedApi(supabase: SupabaseClient) {
           }
         } else if (kind === "trips") {
           delete input.fuelPricePerLitre;
+          // Deleting a vehicle detaches it but retains the trip’s historical
+          // estimate. Unrelated edits must not erase that planning snapshot.
+          if (existing?.fuelEstimate && !fuelInputsChanged) input.fuelEstimate = existing.fuelEstimate;
         }
         const item = await saveEntity(user.id, kind, input, id);
         return { [singular]: item } as T;

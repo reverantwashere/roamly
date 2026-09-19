@@ -99,6 +99,25 @@ test('trip fuel estimates recompute when inputs change and cannot use invalid mi
   assert.equal(detached.fuelEstimate, undefined);
 });
 
+test('trip status changes preserve detached vehicle estimates while fuel-planning changes invalidate them', async () => {
+  const estimate = { litres: 10, cost: 1000, currency: 'INR', mileage: 20, provenance: 'ESTIMATED' };
+  // The vehicle deletion RPC leaves this historical snapshot on the trip,
+  // removing only vehicleId and fuelPricePerLitre.
+  const detached = { ...trip, distanceKm: 200, fuelEstimate: estimate };
+  const fake = client({ rows: [entity('planned-trip', 'trips', detached)] });
+  const api = createHostedApi(fake);
+  const completed = (await api('/trips/planned-trip', { status: 'Completed' }, 'PATCH')).trip;
+  assert.equal(completed.status, 'Completed');
+  assert.deepEqual(completed.fuelEstimate, estimate);
+  assert.equal(completed.vehicleId, undefined);
+  const unchangedCurrency = (await api('/trips/planned-trip', { currency: 'INR' }, 'PATCH')).trip;
+  assert.deepEqual(unchangedCurrency.fuelEstimate, estimate);
+  for (const changes of [{ distanceKm: 300 }, { currency: 'AED' }, { vehicleId: '' }, { fuelPricePerLitre: 120 }]) {
+    const separateApi = createHostedApi(client({ rows: [entity('planned-trip', 'trips', detached)] }));
+    assert.equal((await separateApi('/trips/planned-trip', changes, 'PATCH')).trip.fuelEstimate, undefined);
+  }
+});
+
 test('profile updates preserve existing metadata, validate phone, and normalize styles', async () => {
   const fake = client({ profiles: [{ id: 'alice', name: 'Alice', profile: { interests: ['Nature'], customMetadata: 'keep' } }] });
   const api = createHostedApi(fake);
