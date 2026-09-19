@@ -41,7 +41,9 @@ export default function DestinationCard({
       <button className="destination-content" onClick={onOpen}>
         <span className="place-location">
           <MapPin size={12} />
-          {place.country}
+          {place.distanceKm !== undefined
+            ? `About ${Math.max(1, Math.round(place.distanceKm))} km away`
+            : place.country}
         </span>
         <span className="destination-title">
           {place.name}

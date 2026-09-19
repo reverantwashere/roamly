@@ -35,6 +35,28 @@ export const categories = [
   "City",
 ] as const;
 
+export const keralaHometowns = [
+  ["Thiruvananthapuram", 8.5241, 76.9366], ["Neyyattinkara", 8.3985, 77.0864], ["Attingal", 8.695, 76.815],
+  ["Kollam", 8.8932, 76.6141], ["Punalur", 9.0196, 76.9227], ["Pathanamthitta", 9.2648, 76.787], ["Adoor", 9.155, 76.731],
+  ["Alappuzha", 9.4981, 76.3388], ["Cherthala", 9.683, 76.336], ["Kottayam", 9.5916, 76.5222], ["Pala", 9.7139, 76.6846],
+  ["Kochi", 9.9312, 76.2673], ["Aluva", 10.1004, 76.357], ["Perumbavoor", 10.106, 76.4737], ["Muvattupuzha", 9.9799, 76.5738],
+  ["Thrissur", 10.5276, 76.2144], ["Guruvayur", 10.5943, 76.0411], ["Irinjalakuda", 10.3424, 76.2112],
+  ["Palakkad", 10.7867, 76.6548], ["Ottapalam", 10.773, 76.377], ["Malappuram", 11.051, 76.071], ["Manjeri", 11.1202, 76.12], ["Tirur", 10.9146, 75.922],
+  ["Kozhikode", 11.2588, 75.7804], ["Vadakara", 11.6085, 75.5917], ["Kalpetta", 11.6102, 76.082], ["Mananthavady", 11.802, 76.0],
+  ["Kannur", 11.8745, 75.3704], ["Thalassery", 11.748, 75.4929], ["Kasaragod", 12.4996, 74.9869], ["Kanhangad", 12.3087, 75.091],
+  ["Thodupuzha", 9.897, 76.717], ["Kattappana", 9.7557, 77.116], ["Munnar", 10.0889, 77.0595],
+] as const;
+
+export function distanceFromHometown(city: string, place: Pick<Destination, "lat" | "lng">) {
+  const home = keralaHometowns.find(([name]) => name === city);
+  if (!home) return undefined;
+  const radians = (value: number) => value * Math.PI / 180;
+  const dLat = radians(place.lat - home[1]);
+  const dLng = radians(place.lng - home[2]);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(home[1])) * Math.cos(radians(place.lat)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 /**
  * Kerala beta catalogue; the schema remains globally extensible.
  * Costs and crowd levels are illustrative planning estimates, never live data.
