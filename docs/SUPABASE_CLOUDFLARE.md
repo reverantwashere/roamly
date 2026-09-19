@@ -10,6 +10,16 @@ Roamly will use Supabase for both user accounts and application data. Cloudflare
 4. In **Authentication → Providers**, enable Email, Google, and Apple. Email confirmation should stay enabled. Configure Google and Apple in their provider consoles with Supabase's callback URL.
 5. In **Authentication → Passkeys**, enable passkeys and set the relying-party ID and allowed origins for the final Pages domain. Do not change the relying-party ID after people have enrolled a passkey.
 
+### Use a six-digit signup code
+
+In **Authentication → Emails → Templates → Confirm sign up**:
+
+1. Set the subject to `Your Roamly verification code`.
+2. Switch to the template source editor and paste the contents of [`supabase/templates/confirm-signup.html`](../supabase/templates/confirm-signup.html).
+3. Save the template and keep **Confirm email** enabled.
+
+The `{{ .Token }}` variable in that template is required. It replaces the confirmation link with the six-digit code that Roamly verifies in the signup dialog. For public beta delivery, configure custom SMTP; Supabase's default sender is intended only for testing and restricts recipients and send volume.
+
 For the beta, the default second factor should be email confirmation. Supabase also supports optional authenticator-app (TOTP) MFA.
 
 Roamly can store an optional mobile number as private profile information. It does not send a verification message, so the Supabase Phone provider and an external SMS provider are not required.
@@ -33,5 +43,5 @@ Cloudflare Pages will deploy preview builds for pull requests and production bui
 
 - Replace the temporary `pages.dev` address with the final beta hostname before people register passkeys.
 - Add that exact HTTPS origin to Supabase's redirect and passkey settings.
-- Test email confirmation, Google, Apple, password reset, and TOTP on the deployed preview URL.
+- Test signup email OTP, Google, Apple, password reset, and TOTP on the deployed preview URL.
 - Keep Row Level Security enabled. The migration creates owner-only policies for every Roamly record.

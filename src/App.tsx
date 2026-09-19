@@ -24,6 +24,7 @@ import {
   Leaf,
   List,
   LoaderCircle,
+  LogIn,
   LogOut,
   Map as MapIcon,
   MapPin,
@@ -210,6 +211,11 @@ function App() {
         .catch((e) => notify(e.message));
   }, [page, session, notify]);
   function navigate(next: Page) {
+    if (next === "profile" && session?.user.isGuest) {
+      setSidebarOpen(false);
+      setModal("auth");
+      return;
+    }
     setPage(next);
     setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -415,13 +421,20 @@ function App() {
               <span className="nav-count">{savedPlaces.length}</span>
             )}
           </button>
-          <button
-            className={`nav-item ${page === "profile" ? "active" : ""}`}
-            onClick={() => navigate("profile")}
-          >
-            <SlidersHorizontal size={19} />
-            <span>Travel profile</span>
-          </button>
+          {user.isGuest ? (
+            <button className="nav-item" onClick={() => setModal("auth")}>
+              <LogIn size={19} />
+              <span>Login / Sign up</span>
+            </button>
+          ) : (
+            <button
+              className={`nav-item ${page === "profile" ? "active" : ""}`}
+              onClick={() => navigate("profile")}
+            >
+              <SlidersHorizontal size={19} />
+              <span>Travel profile</span>
+            </button>
+          )}
         </nav>
         <div className="sidebar-bottom">
           <div className="sidebar-note">
@@ -1534,7 +1547,7 @@ function App() {
               </div>
             </>
           )}
-          {page === "profile" && (
+          {page === "profile" && !user.isGuest && (
             <ProfilePage
               session={session}
               onSaved={async () => {
@@ -2156,12 +2169,16 @@ function ProfilePage({
               </label>
               <label>
                 Home city
-                <input
-                  name="city"
-                  defaultValue={profile.city}
-                  maxLength={100}
-                  placeholder="Your city"
-                />
+                <select name="city" defaultValue={profile.city} required>
+                  <option value="" disabled>
+                    Select your hometown
+                  </option>
+                  {keralaHometowns.map(([city]) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
                 Country
