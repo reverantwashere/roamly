@@ -32,7 +32,11 @@ export default function ThemeSwitcher({ preference, resolved, chooseTheme }: {
 
   return (
     <div className="theme-picker" ref={container}
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
+      onBlur={(event) => {
+        // Safari may blur to the page before a clicked option receives its click.
+        // Keep those options mounted; outside pointer clicks are handled above.
+        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
       onKeyDown={(event) => {
         if (event.key === "Escape" && open) {
           event.stopPropagation();
