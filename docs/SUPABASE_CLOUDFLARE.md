@@ -1,14 +1,16 @@
 # Supabase + Cloudflare Pages
 
-Roamly will use Supabase for both user accounts and application data. Cloudflare Pages serves the React/Vite frontend at the edge; it does not run the current local Express and SQLite server. This keeps the beta simple and works well for a Kerala-first web launch.
+Roamly uses Supabase for hosted user accounts and application data. Cloudflare Pages serves the React/Vite frontend; it does not run the local Express and SQLite server. With both public Supabase environment variables present, the frontend uses the hosted adapter instead of `/api` routes.
 
 ## 1. Create the Supabase project
 
 1. Create a Supabase project in a region appropriate for your users.
-2. In the SQL Editor, run [`supabase/migrations/202609190001_roamly.sql`](../supabase/migrations/202609190001_roamly.sql).
+2. In the SQL Editor, run the migrations in order:
+   - [`202609190001_roamly.sql`](../supabase/migrations/202609190001_roamly.sql): profiles, entity storage, and owner-only policies.
+   - [`202609190002_account_delete_rpc.sql`](../supabase/migrations/202609190002_account_delete_rpc.sql): self-service account deletion.
+   - [`202609190003_atomic_account_data.sql`](../supabase/migrations/202609190003_atomic_account_data.sql): atomic fuel recording, related-record deletion, saved-place toggles, and hardened account deletion. Apply this before deploying the hosted data adapter.
 3. In **Authentication → URL Configuration**, add your local address and the Cloudflare Pages production and preview URLs as redirect URLs.
-4. In **Authentication → Providers**, enable Email, Google, and Apple. Email confirmation should stay enabled. Configure Google and Apple in their provider consoles with Supabase's callback URL.
-5. In **Authentication → Passkeys**, enable passkeys and set the relying-party ID and allowed origins for the final Pages domain. Do not change the relying-party ID after people have enrolled a passkey.
+4. In **Authentication → Providers**, enable Email and keep email confirmation enabled. Google, Apple, and passkeys are optional future integrations; the current signup dialog uses email and password.
 
 ### Use a six-digit signup code
 
@@ -24,7 +26,7 @@ In **Authentication → Emails → Templates → Reset password**, set the subje
 
 Supabase's built-in sender is limited to two authentication emails per hour across signup, resend, and password recovery. A rate-limit or generic recovery-email failure therefore requires waiting for the quota to refill or configuring custom SMTP under **Authentication → Emails → SMTP Settings**.
 
-For the beta, the default second factor should be email confirmation. Supabase also supports optional authenticator-app (TOTP) MFA.
+Email confirmation verifies ownership of the signup address; it is not a second authentication factor. Supabase also supports optional authenticator-app (TOTP) MFA.
 
 Roamly can store an optional mobile number as private profile information. It does not send a verification message, so the Supabase Phone provider and an external SMS provider are not required.
 
@@ -45,7 +47,12 @@ Cloudflare Pages will deploy preview builds for pull requests and production bui
 
 ## 3. Before making the beta public
 
-- Replace the temporary `pages.dev` address with the final beta hostname before people register passkeys.
-- Add that exact HTTPS origin to Supabase's redirect and passkey settings.
-- Test signup email OTP, Google, Apple, password reset, and TOTP on the deployed preview URL.
+- Set the production HTTPS origin as the Supabase Site URL and allow the intended production and preview redirects.
+- Test signup email OTP, login, password reset, onboarding, and sign-out on the deployed preview URL.
+- Save a trip, vehicle, expense, fuel record, and place; reload and confirm persistence. Test edits and deletions with disposable records.
+- Check that a second account cannot read or change the first account's data. `npm test` also runs the database migrations in an isolated PostgreSQL engine to cover owner isolation and rollback behavior.
 - Keep Row Level Security enabled. The migration creates owner-only policies for every Roamly record.
+
+## Existing project upgrade
+
+For an existing project, apply only the missing migrations in order. The third migration replaces functions without deleting existing user records. Its functions use the signed-in user's identity; never expose a service-role key in the browser. A successful Pages build does not apply SQL migrations automatically.

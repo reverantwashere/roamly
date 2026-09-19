@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type FormEvent } from "react";
+import { useState, useEffect, useCallback, useRef, type FormEvent } from "react";
 import {
   getCountries,
   getCountryCallingCode,
@@ -15,6 +15,7 @@ import {
   CalendarDays,
   CarFront,
   Check,
+  CircleAlert,
   ChevronDown,
   ChevronRight,
   Compass,
@@ -60,6 +61,8 @@ import {
   type Destination,
   type DiscoveryKind,
 } from "./lib/data";
+import { destinationForDiscovery } from "./lib/discovery";
+import { normalizePersonality } from "./lib/preferences";
 import { hasIntentExpansion, intentScore } from "./lib/search";
 import { remainingRange } from "./lib/planner";
 import { supabase } from "./lib/supabase";
@@ -143,6 +146,21 @@ const exploreModes: { name: ExploreMode; icon: typeof Compass }[] = [
   { name: "Shopping", icon: ShoppingBag },
   { name: "Stays", icon: BedDouble },
 ];
+const routedPages = new Set<Page>([
+  "home",
+  "explore",
+  "trips",
+  "vehicle",
+  "expenses",
+  "social",
+  "ai",
+  "saved",
+  "profile",
+]);
+function pageFromLocation(): Page {
+  const candidate = new URLSearchParams(window.location.search).get("page") as Page | null;
+  return candidate && routedPages.has(candidate) ? candidate : "home";
+}
 function IconBox({
   icon: Icon,
   color = "sage",
@@ -190,13 +208,13 @@ function App() {
   })() as AuthMode | undefined;
   const [session, setSession] = useState<Session | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [page, setPage] = useState<Page>("home");
+  const [page, setPage] = useState<Page>(pageFromLocation);
   const [modal, setModal] = useState<ModalType>(initialAuthMode ? "auth" : null);
   const [authMode, setAuthMode] = useState<AuthMode | undefined>(initialAuthMode);
   const [selectedPlace, setSelectedPlace] = useState<Destination>();
   const [selectedTrip, setSelectedTrip] = useState<Trip>();
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle>();
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState<{ message: string; tone: "success" | "error" } | null>(null);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("For you");
   const [exploreMode, setExploreMode] = useState<ExploreMode>("Places");
@@ -204,13 +222,17 @@ function App() {
   const [stayBudget, setStayBudget] = useState<BudgetTier>("Balanced");
   const [mapView, setMapView] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
+  const locationPicker = useRef<HTMLDivElement>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expenseTrip, setExpenseTrip] = useState("all");
   const [expenseCurrency, setExpenseCurrency] = useState("INR");
   const [fuelRecords, setFuelRecords] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const closeModal = useCallback(() => setModal(null), []);
-  const notify = useCallback((message: string) => setToast(message), []);
+  const notify = useCallback(
+    (message: string, tone: "success" | "error" = "success") => setToast({ message, tone }),
+    [],
+  );
   const refresh = useCallback(async () => {
     try {
       const next = await api<Session>("/session");
@@ -227,14 +249,23 @@ function App() {
   }, [refresh]);
   useEffect(() => {
     if (!supabase) return;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
         setAuthMode("reset");
         setModal("auth");
       }
+      if (event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        // Auth calls must run after Supabase releases the event callback lock.
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => { refresh().catch(() => {}); }, 0);
+      }
     });
-    return () => data.subscription.unsubscribe();
-  }, []);
+    return () => {
+      clearTimeout(refreshTimer);
+      data.subscription.unsubscribe();
+    };
+  }, [refresh]);
   useEffect(() => {
     if (session && !session.user.isGuest && session.profile.onboarded !== true && modal === null) {
       setModal("onboarding");
@@ -261,14 +292,58 @@ function App() {
   }, [session?.trips]);
   useEffect(() => {
     if (!toast) return;
-    const timer = setTimeout(() => setToast(""), 4500);
+    const timer = setTimeout(() => setToast(null), 4500);
     return () => clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
-    if (page === "vehicle")
-      api("/fuel-records")
-        .then((data) => setFuelRecords(data.fuelRecords || []))
-        .catch((e) => notify(e.message));
+    const onPopState = () => {
+      setPage(pageFromLocation());
+      setSidebarOpen(false);
+      setLocationOpen(false);
+      setModal((current) => current === "onboarding" ? current : null);
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+  useEffect(() => {
+    if (!locationOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!locationPicker.current?.contains(event.target as Node)) setLocationOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setLocationOpen(false);
+        locationPicker.current?.querySelector<HTMLButtonElement>(".location-button")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [locationOpen]);
+  useEffect(() => {
+    if (session?.user.isGuest && page === "profile") {
+      setPage("home");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("page");
+      window.history.replaceState({ page: "home" }, "", url);
+      setModal("auth");
+    }
+  }, [page, session?.user.isGuest]);
+  useEffect(() => {
+    if (!session || session.user.isGuest) {
+      setFuelRecords([]);
+      return;
+    }
+    if (page !== "vehicle") return;
+    let cancelled = false;
+    api("/fuel-records")
+      .then((data) => { if (!cancelled) setFuelRecords(data.fuelRecords || []); })
+      .catch((e) => { if (!cancelled) notify(e.message, "error"); });
+    return () => { cancelled = true; };
   }, [page, session, notify]);
   function navigate(next: Page) {
     if (next === "profile" && session?.user.isGuest) {
@@ -277,13 +352,26 @@ function App() {
       return;
     }
     setPage(next);
+    const url = new URL(window.location.href);
+    if (next === "home") url.searchParams.delete("page");
+    else url.searchParams.set("page", next);
+    if (url.href !== window.location.href)
+      window.history.pushState({ page: next }, "", url);
     setSidebarOpen(false);
+    setLocationOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (next !== "explore") setSearch("");
   }
   function planner(place?: Destination) {
+    if (session?.user.isGuest) {
+      setModal("auth");
+      return;
+    }
     setSelectedPlace(place);
     setModal("planner");
+  }
+  function openEditor(kind: "vehicle" | "fuel" | "expense" | "deleteVehicle" | "deleteTrip") {
+    setModal(session?.user.isGuest ? "auth" : kind);
   }
   function openPlace(place: Destination) {
     setSelectedPlace(place);
@@ -294,6 +382,10 @@ function App() {
     setModal("trip");
   }
   async function savePlace(id: string) {
+    if (session?.user.isGuest) {
+      setModal("auth");
+      return;
+    }
     try {
       const data = await api("/saved-places", { placeId: id });
       setSession((s) => (s ? { ...s, savedPlaces: data.savedPlaces } : s));
@@ -303,7 +395,7 @@ function App() {
           : "Place removed from your collection.",
       );
     } catch (e) {
-      notify((e as Error).message);
+      notify((e as Error).message, "error");
     }
   }
   async function chooseLocation(city: string) {
@@ -318,7 +410,7 @@ function App() {
       await refresh();
       notify(`Home location changed to ${city}.`);
     } catch (e) {
-      notify((e as Error).message);
+      notify((e as Error).message, "error");
     }
   }
   async function removeEntity(type: "trips" | "vehicles", id: string) {
@@ -329,7 +421,7 @@ function App() {
       closeModal();
       notify(type === "trips" ? "Trip deleted." : "Vehicle removed.");
     } catch (e) {
-      notify((e as Error).message);
+      notify((e as Error).message, "error");
     } finally {
       setBusy(false);
     }
@@ -365,7 +457,8 @@ function App() {
         )}
       </div>
     );
-  const { profile, user, trips, vehicles, expenses, savedPlaces } = session;
+  const { user, trips, vehicles, expenses, savedPlaces } = session;
+  const profile = { ...session.profile, personality: normalizePersonality(session.profile.personality) };
   const firstName =
     profile.name?.split(" ")[0] || user.name?.split(" ")[0] || "traveller";
   const vehicle = vehicles[0];
@@ -562,7 +655,7 @@ function App() {
               <strong>{profile.name || user.name}</strong>
               <small>
                 {user.isGuest
-                  ? "Your personal travel space"
+                  ? "Sign in to save your plans"
                   : "Roamly explorer"}
               </small>
             </span>
@@ -597,17 +690,21 @@ function App() {
                 onChange={(e) => {
                   setSearch(e.target.value);
                   if (page !== "explore") {
-                    setPage("explore");
+                    navigate("explore");
                     setCategory("For you");
+                    setExploreMode("Places");
+                    setExploreDistrict("All Kerala");
+                    setMapView(false);
                   }
                 }}
               />
             </div>
-            <div className={`location-picker ${locationOpen ? "open" : ""}`}>
+            <div ref={locationPicker} className={`location-picker ${locationOpen ? "open" : ""}`}>
               <button
                 className="location-button"
                 onClick={() => setLocationOpen((open) => !open)}
-                aria-haspopup="listbox"
+                aria-label={`Choose location, current ${profile.city || "not set"}`}
+                aria-controls="location-options"
                 aria-expanded={locationOpen}
               >
                 <MapPin size={15} />
@@ -615,10 +712,10 @@ function App() {
                 <ChevronDown size={12} />
               </button>
               {locationOpen && (
-                <div className="location-dropdown" role="listbox" aria-label="Choose your Kerala location">
+                <div id="location-options" className="location-dropdown" role="group" aria-label="Choose your Kerala location">
                   <span>YOUR AREA</span>
                   {keralaHometowns.map(([city]) => (
-                    <button key={city} role="option" aria-selected={profile.city === city} onClick={() => chooseLocation(city)}>
+                    <button key={city} aria-pressed={profile.city === city} onClick={() => chooseLocation(city)}>
                       <MapPin size={13} />
                       {city}
                       {profile.city === city && <Check size={13} />}
@@ -970,7 +1067,7 @@ function App() {
                           className="panel-link"
                           onClick={() => {
                             setSelectedVehicle(undefined);
-                            setModal("vehicle");
+                            openEditor("vehicle");
                           }}
                         >
                           Add your vehicle
@@ -1022,7 +1119,7 @@ function App() {
                     </div>
                     <button
                       className="panel-link"
-                      onClick={() => setModal("expense")}
+                      onClick={() => openEditor("expense")}
                     >
                       Keep track of the little things
                       <Plus size={15} />
@@ -1205,9 +1302,7 @@ function App() {
                               : item.kind === "Shopping"
                                 ? ShoppingBag
                                 : BedDouble;
-                        const nearby = destinations.find(
-                          (place) => place.district === item.district,
-                        );
+                        const nearby = destinationForDiscovery(item, destinations);
                         return (
                           <article className="discovery-card" key={item.id}>
                             <div className="discovery-card-heading">
@@ -1227,12 +1322,22 @@ function App() {
                             </div>
                             <div className="discovery-card-footer">
                               <span>{item.priceHint}</span>
-                              {nearby && (
-                                <button onClick={() => planner(nearby)}>
-                                  Plan in {item.district}
-                                  <ArrowUpRight size={14} />
-                                </button>
-                              )}
+                              <button
+                                onClick={() => {
+                                  if (nearby) {
+                                    planner(nearby);
+                                    return;
+                                  }
+                                  setExploreMode("Places");
+                                  setExploreDistrict(item.district);
+                                  setSearch("");
+                                  setCategory("For you");
+                                  setMapView(false);
+                                }}
+                              >
+                                {nearby ? `Plan for ${nearby.name}` : `Explore ${item.district}`}
+                                <ArrowUpRight size={14} />
+                              </button>
                             </div>
                           </article>
                         );
@@ -1302,6 +1407,8 @@ function App() {
                       onClick: () => {
                         setSearch("");
                         setCategory("For you");
+                        setExploreMode("Places");
+                        setExploreDistrict("All Kerala");
                         navigate("explore");
                       },
                     }}
@@ -1431,7 +1538,7 @@ function App() {
                   className="button primary"
                   onClick={() => {
                     setSelectedVehicle(undefined);
-                    setModal("vehicle");
+                    openEditor("vehicle");
                   }}
                 >
                   <Plus size={17} />
@@ -1454,7 +1561,7 @@ function App() {
                             aria-label={`Edit ${v.name}`}
                             onClick={() => {
                               setSelectedVehicle(v);
-                              setModal("vehicle");
+                              openEditor("vehicle");
                             }}
                           >
                             <Settings2 size={18} />
@@ -1508,7 +1615,7 @@ function App() {
                             className="button primary"
                             onClick={() => {
                               setSelectedVehicle(v);
-                              setModal("fuel");
+                              openEditor("fuel");
                             }}
                           >
                             <Plus size={15} />
@@ -1518,7 +1625,7 @@ function App() {
                             className="button secondary"
                             onClick={() => {
                               setSelectedVehicle(v);
-                              setModal("vehicle");
+                              openEditor("vehicle");
                             }}
                           >
                             Update details
@@ -1528,7 +1635,7 @@ function App() {
                             aria-label={`Remove ${v.name}`}
                             onClick={() => {
                               setSelectedVehicle(v);
-                              setModal("deleteVehicle");
+                              openEditor("deleteVehicle");
                             }}
                           >
                             <Trash2 size={16} />
@@ -1616,7 +1723,7 @@ function App() {
                       label: "Add my vehicle",
                       onClick: () => {
                         setSelectedVehicle(undefined);
-                        setModal("vehicle");
+                        openEditor("vehicle");
                       },
                     }}
                   />
@@ -1640,7 +1747,7 @@ function App() {
                 </div>
                 <button
                   className="button primary"
-                  onClick={() => setModal("expense")}
+                  onClick={() => openEditor("expense")}
                 >
                   <Plus size={17} />
                   Add expense
@@ -1777,7 +1884,7 @@ function App() {
                                     await refresh();
                                     notify("Expense removed.");
                                   } catch (error) {
-                                    notify((error as Error).message);
+                                    notify((error as Error).message, "error");
                                   }
                                 }}
                               >
@@ -1796,7 +1903,7 @@ function App() {
                     description={`No expenses in ${expenseCurrency} for this selection. Add one when your journey begins.`}
                     action={{
                       label: "Add an expense",
-                      onClick: () => setModal("expense"),
+                      onClick: () => openEditor("expense"),
                     }}
                   />
                 )}
@@ -1818,7 +1925,7 @@ function App() {
                   navigate("home");
                   notify("Signed out. You’re in a fresh guest space.");
                 } catch (e) {
-                  notify((e as Error).message);
+                  notify((e as Error).message, "error");
                 }
               }}
               onDelete={() => setModal("deleteAccount")}
@@ -1903,8 +2010,8 @@ function App() {
           <div className="guest-bar">
             <span>
               <Compass size={15} />
-              <strong>A little taste of Roamly.</strong> You’re exploring a
-              private guest space with sample data.
+              <strong>A little taste of Roamly.</strong> Browse freely, then
+              sign in to save trips, places, and preferences.
             </span>
             <button onClick={() => setModal("auth")}>
               Make it yours
@@ -1914,12 +2021,15 @@ function App() {
         )}
       </div>
       {toast && (
-        <div className="toast" role="status">
-          <Check size={17} />
-          {toast}
+        <div
+          className={`toast ${toast.tone}`}
+          role={toast.tone === "error" ? "alert" : "status"}
+        >
+          {toast.tone === "error" ? <CircleAlert size={17} /> : <Check size={17} />}
+          {toast.message}
           <button
             aria-label="Dismiss notification"
-            onClick={() => setToast("")}
+            onClick={() => setToast(null)}
           >
             <X size={14} />
           </button>
@@ -2136,6 +2246,7 @@ function App() {
                   </div>
                   <div>
                     <h4>{day.title || `Day ${i + 1}`}</h4>
+                    {day.note && <p className="data-note">{day.note}</p>}
                     {day.activities?.map((a, j) => (
                       <div className="activity" key={j}>
                         <time>{a.time}</time>
@@ -2190,7 +2301,7 @@ function App() {
             )}
             <button
               className="button danger-plain"
-              onClick={() => setModal("deleteTrip")}
+              onClick={() => openEditor("deleteTrip")}
             >
               <Trash2 size={15} />
               Delete trip
@@ -2213,7 +2324,7 @@ function App() {
                   await refresh();
                   notify("Trip status updated.");
                 } catch (e) {
-                  notify((e as Error).message);
+                  notify((e as Error).message, "error");
                 }
               }}
             >
@@ -2306,7 +2417,7 @@ function App() {
               navigate("home");
               notify("Your previous Roamly space has been deleted.");
             } catch (e) {
-              notify((e as Error).message);
+              notify((e as Error).message, "error");
             } finally {
               setBusy(false);
             }
@@ -2364,13 +2475,15 @@ function ProfilePage({
   onAuth: () => void;
   onLogout: () => void;
   onDelete: () => void;
-  notify: (s: string) => void;
+  notify: (message: string, tone?: "success" | "error") => void;
 }) {
   const { profile, user } = session;
   const [interests, setInterests] = useState(profile.interests || []);
   const [personality, setPersonality] = useState(
-    profile.personality || "Peace-seeking",
+    normalizePersonality(profile.personality),
   );
+  const [homeCity, setHomeCity] = useState(profile.city || "");
+  useEffect(() => { setHomeCity(profile.city || ""); }, [profile.city]);
   const [notifications, setNotifications] = useState<Record<string, boolean>>(
     typeof profile.notifications === "object"
       ? profile.notifications
@@ -2456,7 +2569,7 @@ function ProfilePage({
               </label>
               <label>
                 Home city
-                <select name="city" defaultValue={profile.city} required>
+                <select name="city" value={homeCity} onChange={(event) => setHomeCity(event.target.value)} required>
                   <option value="" disabled>
                     Select your hometown
                   </option>
@@ -2776,7 +2889,7 @@ function ProfilePage({
                   setTimeout(() => URL.revokeObjectURL(url), 1000);
                   notify("Your personal data export is ready.");
                 } catch (e) {
-                  notify((e as Error).message);
+                  notify((e as Error).message, "error");
                 }
               }}
             >

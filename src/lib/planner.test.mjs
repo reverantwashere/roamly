@@ -29,7 +29,8 @@ test('planner uses destination landmarks and adapts morning times to selected st
   assert.equal(quiet.length, 3)
   assert.equal(quiet[0].activities[0].title, 'Tea garden viewpoints')
   assert.equal(quiet[0].activities[0].time, '07:30')
-  assert.equal(social[0].activities[0].title, 'Munnar town')
+  assert.equal(social[0].activities[1].title, 'Munnar town')
+  assert.equal(social[0].activities[1].time, '13:00')
   assert.equal(social[0].activities[0].time, '09:00')
   assert.ok(quiet.every((day) => day.activities.every((activity) => activity.provenance === 'Estimated')))
 })
@@ -60,6 +61,64 @@ test('Kerala catalogue uses local INR estimates while the schema allows other cu
   assert.equal(local[0].activities[0].currency, 'INR')
   const legacy = { ...destinations[0], costCurrency: undefined, costPerDay: 50 }
   assert.equal(buildItinerary(legacy, 1)[0].activities[0].currency, 'USD')
+})
+
+test('every catalogue destination has a specific itinerary instead of generic filler', () => {
+  for (const destination of destinations) {
+    const titles = buildItinerary(destination, 2, 'Ambivert', 'balanced', 1)
+      .flatMap((day) => day.activities.map((activity) => activity.title))
+    assert.ok(!titles.includes(`${destination.name} at your pace`), `${destination.name} used the generic planner fallback`)
+    assert.ok(!titles.includes('Discover the neighbourhood'), `${destination.name} used the generic planner fallback`)
+  }
+})
+
+test('longer stays do not recycle curated stops or fabricate extra visits', () => {
+  for (const destination of destinations) {
+    for (const group of ['Solo', 'Family']) {
+      const itinerary = buildItinerary(destination, 30, 'Ambivert', 2500, 1, 'INR', group)
+      const titles = itinerary.flatMap((day) => day.activities.map((activity) => activity.title))
+      assert.equal(itinerary.length, 30)
+      assert.equal(new Set(titles).size, titles.length, `${destination.name} repeats a stop`)
+      assert.ok(itinerary[0].activities.length > 0)
+      assert.ok(itinerary.at(-1).activities.length === 0)
+      assert.match(itinerary.at(-1).note, /no further curated stops/)
+      assert.ok(itinerary.every((day) => day.activities.length > 0 || day.note))
+    }
+  }
+})
+
+test('style and family scheduling keep morning, lunch and evening stops in suitable windows', () => {
+  for (const destination of destinations) {
+    for (const style of ['Introvert', 'Extrovert', 'Adventure-seeking', 'Ambivert']) {
+      for (const group of ['Solo', 'Family']) {
+        const activities = buildItinerary(destination, 7, style, 2500, 2, 'INR', group)
+          .flatMap((day) => day.activities)
+        for (const activity of activities) {
+          if (/sunset|evening/i.test(activity.title)) {
+            assert.ok(activity.time >= '17:00', `${activity.title} was scheduled at ${activity.time}`)
+          }
+          if (/morning/i.test(activity.title)) {
+            assert.ok(activity.time < '12:00', `${activity.title} was scheduled at ${activity.time}`)
+          }
+          if (/lunch/i.test(activity.title)) {
+            assert.ok(activity.time >= '11:00' && activity.time < '16:00', `${activity.title} was scheduled at ${activity.time}`)
+          }
+        }
+      }
+    }
+  }
+})
+
+test('a Silent Valley forest excursion reserves enough time and is not split into separate tours', () => {
+  const destination = destinations.find((place) => place.id === 'silent-valley')
+  for (const group of ['Solo', 'Family']) {
+    const itinerary = buildItinerary(destination, 2, 'Extrovert', 2500, 2, 'INR', group)
+    assert.equal(itinerary[0].activities[0].title, 'Sairandhri guided excursion')
+    assert.ok(itinerary[0].activities[0].time < '12:00')
+    assert.ok(itinerary[0].activities.slice(1).every((activity) => activity.time >= '17:00'))
+    assert.deepEqual(itinerary[1].activities, [])
+    assert.match(itinerary[1].note, /no further curated stops/)
+  }
 })
 
 test('family trips leave more breathing room and request facility checks without claiming accessibility', () => {

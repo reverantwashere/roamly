@@ -409,7 +409,7 @@ button:hover {
   padding: 10px;
   border: 1px solid #e0e6d8;
   border-radius: 10px;
-  background: rgba(255, 255, 255, .98);
+  background: #fff;
   box-shadow: 0 18px 45px rgba(40, 67, 48, .14);
   max-height: min(520px, calc(100vh - 110px));
   overflow-y: auto;
@@ -435,11 +435,11 @@ button:hover {
   text-align: left;
 }
 .location-dropdown button:hover,
-.location-dropdown button[aria-selected="true"] {
+.location-dropdown button[aria-pressed="true"] {
   background: #eef3e8;
   color: #315440;
 }
-.location-dropdown button > svg:last-child { margin-left: auto; }
+.location-dropdown button > svg:last-child:not(:first-child) { margin-left: auto; }
 .location-dropdown .location-edit {
   border-top: 1px solid #e7eadf;
   border-radius: 0;
@@ -2865,6 +2865,12 @@ label > small {
 .toast > svg {
   color: #d2e3b5;
 }
+.toast.error {
+  background: #8b4f3d;
+}
+.toast.error > svg {
+  color: #ffe1d6;
+}
 .toast > button {
   color: #dee8cf;
   display: flex;
@@ -3928,7 +3934,29 @@ label > small {
     gap: 11px;
   }
   .location-button {
+    display: inline-flex;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    justify-content: center;
+    border: 1px solid #e4e8df;
+    border-radius: 50%;
+  }
+  .location-button > span,
+  .location-button > svg:last-child {
     display: none;
+  }
+  .location-dropdown {
+    position: fixed;
+    top: 58px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: calc(100vh - 76px);
+  }
+  .location-dropdown button {
+    min-height: 44px;
+    font-size: 12px;
   }
   .main-content {
     padding: 22px 16px 17px;
