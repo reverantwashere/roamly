@@ -47,7 +47,6 @@ import {
 } from "lucide-react";
 import { destinations, distanceFromHometown, keralaHometowns, type Destination } from "./lib/data";
 import { remainingRange } from "./lib/planner";
-import { supabase } from "./lib/supabase";
 import {
   api,
   currencies,
@@ -2079,8 +2078,10 @@ function ProfilePage({
   );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const initialPhone = user.phone
-    ? parsePhoneNumberFromString(user.phone)
+  const savedPhone =
+    typeof profile.phone === "string" ? profile.phone : "";
+  const initialPhone = savedPhone
+    ? parsePhoneNumberFromString(savedPhone)
     : undefined;
   const [phoneCountry, setPhoneCountry] = useState<CountryCode>(
     initialPhone?.country || "IN",
@@ -2088,77 +2089,25 @@ function ProfilePage({
   const [phoneNationalNumber, setPhoneNationalNumber] = useState(
     initialPhone?.nationalNumber || "",
   );
-  const [phoneForVerification, setPhoneForVerification] = useState(
-    user.phone || "",
-  );
-  const [phoneCode, setPhoneCode] = useState("");
-  const [phoneStage, setPhoneStage] = useState<
-    "entry" | "code" | "verified"
-  >(user.phoneVerified ? "verified" : "entry");
-  const [phoneBusy, setPhoneBusy] = useState(false);
-  const [phoneError, setPhoneError] = useState("");
-  async function sendPhoneCode() {
-    setPhoneError("");
-    const parsedPhone = parsePhoneNumberFromString(
-      phoneNationalNumber,
-      phoneCountry,
-    );
-    if (!parsedPhone?.isValid()) {
-      setPhoneError("Enter a valid mobile number for the selected country.");
-      return;
-    }
-    if (!supabase) {
-      setPhoneError("Mobile verification is unavailable right now.");
-      return;
-    }
-    setPhoneBusy(true);
-    try {
-      const normalizedPhone = parsedPhone.number;
-      const { error } = await supabase.auth.updateUser({
-        phone: normalizedPhone,
-      });
-      if (error) throw error;
-      setPhoneForVerification(normalizedPhone);
-      setPhoneStage("code");
-      notify("Verification code sent by SMS.");
-    } catch (e) {
-      setPhoneError((e as Error).message);
-    } finally {
-      setPhoneBusy(false);
-    }
-  }
-  async function verifyPhoneCode() {
-    setPhoneError("");
-    if (!/^\d{6}$/.test(phoneCode)) {
-      setPhoneError("Enter the 6-digit SMS code.");
-      return;
-    }
-    if (!supabase) {
-      setPhoneError("Mobile verification is unavailable right now.");
-      return;
-    }
-    setPhoneBusy(true);
-    try {
-      const { error } = await supabase.auth.verifyOtp({
-        phone: phoneForVerification,
-        token: phoneCode,
-        type: "phone_change",
-      });
-      if (error) throw error;
-      setPhoneStage("verified");
-      await onSaved();
-      notify("Mobile number verified.");
-    } catch (e) {
-      setPhoneError((e as Error).message);
-    } finally {
-      setPhoneBusy(false);
-    }
-  }
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     setBusy(true);
     const data = Object.fromEntries(new FormData(e.currentTarget));
+    if (phoneNationalNumber) {
+      const parsedPhone = parsePhoneNumberFromString(
+        phoneNationalNumber,
+        phoneCountry,
+      );
+      if (!parsedPhone?.isValid()) {
+        setError("Enter a valid mobile number for the selected country.");
+        setBusy(false);
+        return;
+      }
+      data.phone = parsedPhone.number;
+    } else {
+      data.phone = "";
+    }
     try {
       await api(
         "/profile",
@@ -2231,6 +2180,43 @@ function ProfilePage({
                   ))}
                 </select>
               </label>
+              <div className="profile-phone-field">
+                <span className="profile-field-label">
+                  Mobile number <small>Optional</small>
+                </span>
+                <div className="phone-number-fields">
+                  <select
+                    value={phoneCountry}
+                    onChange={(e) =>
+                      setPhoneCountry(e.target.value as CountryCode)
+                    }
+                    aria-label="Country calling code"
+                  >
+                    {phoneCountries.map((option) => (
+                      <option key={option.country} value={option.country}>
+                        {option.name} (+{option.callingCode})
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    value={phoneNationalNumber}
+                    onChange={(e) =>
+                      setPhoneNationalNumber(
+                        e.target.value.replace(/\D/g, ""),
+                      )
+                    }
+                    placeholder="Mobile number"
+                    aria-label="Mobile number without country code"
+                  />
+                </div>
+                <small>
+                  Private account information. No verification message will be
+                  sent.
+                </small>
+              </div>
               <label>
                 Language
                 <select name="language" defaultValue="English">
@@ -2449,144 +2435,6 @@ function ProfilePage({
                 ? "Create an account to keep your guest journeys, vehicle, and saved places together."
                 : user.email}
             </p>
-            {!user.isGuest && (
-              <div className="phone-verification">
-                <div className="phone-verification-heading">
-                  <span>Mobile number</span>
-                  {phoneStage === "verified" && (
-                    <small>
-                      <Check size={12} /> Verified
-                    </small>
-                  )}
-                </div>
-                {phoneStage === "verified" ? (
-                  <>
-                    <div className="verified-phone">
-                      <ShieldCheck size={16} />
-                      {parsePhoneNumberFromString(
-                        user.phone || phoneForVerification,
-                      )?.formatInternational() ||
-                        user.phone ||
-                        phoneForVerification}
-                    </div>
-                    <button
-                      type="button"
-                      className="text-button"
-                      onClick={() => {
-                        setPhoneNationalNumber("");
-                        setPhoneCode("");
-                        setPhoneStage("entry");
-                        setPhoneError("");
-                      }}
-                    >
-                      Change mobile number
-                    </button>
-                  </>
-                ) : phoneStage === "entry" ? (
-                  <>
-                    <div className="phone-number-fields">
-                      <select
-                        value={phoneCountry}
-                        onChange={(e) => {
-                          setPhoneCountry(e.target.value as CountryCode);
-                          setPhoneError("");
-                        }}
-                        aria-label="Country calling code"
-                      >
-                        {phoneCountries.map((option) => (
-                          <option
-                            key={option.country}
-                            value={option.country}
-                          >
-                            {option.name} (+{option.callingCode})
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="tel"
-                        inputMode="numeric"
-                        autoComplete="tel-national"
-                        value={phoneNationalNumber}
-                        onChange={(e) =>
-                          setPhoneNationalNumber(
-                            e.target.value.replace(/\D/g, ""),
-                          )
-                        }
-                        placeholder="Mobile number"
-                        aria-label="Mobile number without country code"
-                      />
-                    </div>
-                    <p className="tiny-muted">
-                      Choose any country or territory, then enter the number
-                      without its country code.
-                    </p>
-                    <button
-                      type="button"
-                      className="button secondary full"
-                      onClick={sendPhoneCode}
-                      disabled={phoneBusy}
-                    >
-                      {phoneBusy && (
-                        <LoaderCircle size={15} className="spin" />
-                      )}{" "}
-                      Send verification code
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="tiny-muted">
-                      Enter the 6-digit code sent to {phoneForVerification}.
-                    </p>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      value={phoneCode}
-                      onChange={(e) =>
-                        setPhoneCode(
-                          e.target.value.replace(/\D/g, "").slice(0, 6),
-                        )
-                      }
-                      placeholder="000000"
-                      aria-label="SMS verification code"
-                    />
-                    <button
-                      type="button"
-                      className="button primary full"
-                      onClick={verifyPhoneCode}
-                      disabled={phoneBusy || phoneCode.length !== 6}
-                    >
-                      {phoneBusy && (
-                        <LoaderCircle size={15} className="spin" />
-                      )}{" "}
-                      Verify mobile number
-                    </button>
-                    <div className="phone-verification-actions">
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={sendPhoneCode}
-                        disabled={phoneBusy}
-                      >
-                        Resend code
-                      </button>
-                      <button
-                        type="button"
-                        className="text-button"
-                        onClick={() => {
-                          setPhoneStage("entry");
-                          setPhoneCode("");
-                          setPhoneError("");
-                        }}
-                      >
-                        Use a different number
-                      </button>
-                    </div>
-                  </>
-                )}
-                <ErrorMessage error={phoneError} />
-              </div>
-            )}
             {user.isGuest ? (
               <button
                 type="button"
