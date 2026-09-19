@@ -2169,12 +2169,16 @@ function ProfilePage({
               </label>
               <label>
                 Home city
-                <input
-                  name="city"
-                  defaultValue={profile.city}
-                  maxLength={100}
-                  placeholder="Your city"
-                />
+                <select name="city" defaultValue={profile.city} required>
+                  <option value="" disabled>
+                    Select your hometown
+                  </option>
+                  {keralaHometowns.map(([city]) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
                 Country
