@@ -57,6 +57,7 @@ import DestinationMap from "./components/DestinationMap";
 import Modal from "./components/Modal";
 import {
   AuthModal,
+  OnboardingModal,
   PlannerModal,
   VehicleModal,
   ExpenseModal,
@@ -67,6 +68,7 @@ import {
 
 type ModalType =
   | "auth"
+  | "onboarding"
   | "planner"
   | "place"
   | "trip"
@@ -176,6 +178,11 @@ function App() {
   useEffect(() => {
     refresh().catch(() => {});
   }, [refresh]);
+  useEffect(() => {
+    if (session && !session.user.isGuest && session.profile.onboarded !== true && modal === null) {
+      setModal("onboarding");
+    }
+  }, [session, modal]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4500);
@@ -1598,7 +1605,22 @@ function App() {
           onClose={closeModal}
           onSuccess={(s) => {
             setSession(s);
-            notify("Welcome to your Roamly.");
+            if (s.profile.onboarded === true) {
+              closeModal();
+              notify("Welcome to your Roamly.");
+            } else {
+              setModal("onboarding");
+            }
+          }}
+        />
+      )}
+      {modal === "onboarding" && !user.isGuest && (
+        <OnboardingModal
+          profile={profile}
+          onComplete={async () => {
+            await refresh();
+            closeModal();
+            notify("Your Roamly is ready for you.");
           }}
         />
       )}

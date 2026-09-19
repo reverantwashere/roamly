@@ -3545,6 +3545,47 @@ label > small {
     margin-top: 10px;
   }
 }
+
+.onboarding-progress {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 4px 0 28px;
+}
+.onboarding-progress span {
+  height: 4px;
+  border-radius: 999px;
+  background: #e5eadc;
+}
+.onboarding-progress span.active { background: #64834f; }
+.onboarding-step { min-height: 285px; }
+.onboarding-step h3 { margin: 0 0 7px; color: #294535; font-size: 22px; }
+.onboarding-step > p { margin: 0 0 22px; color: #829276; }
+.onboarding-step > label { display: block; margin: 22px 0 0; }
+.onboarding-choices { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 18px; }
+.onboarding-choices button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #dce4d2;
+  border-radius: 999px;
+  background: #fff;
+  color: #506b52;
+  padding: 11px 15px;
+  font: inherit;
+  cursor: pointer;
+}
+.onboarding-choices button.selected {
+  color: #294f3b;
+  background: #edf4e5;
+  border-color: #789864;
+  box-shadow: 0 0 0 2px rgba(120, 152, 100, .12);
+}
+.onboarding-actions { justify-content: flex-end; margin-top: 12px; }
+@media (max-width: 600px) {
+  .onboarding-step { min-height: 360px; }
+  .onboarding-choices button { padding: 10px 12px; }
+}
 @media (max-width: 480px) {
   .topbar {
     padding: 0 16px;
