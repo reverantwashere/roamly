@@ -27,8 +27,10 @@ create unique index if not exists saved_places_per_user_idx
 alter table public.profiles enable row level security;
 alter table public.entities enable row level security;
 
+drop policy if exists "Users manage their own profile" on public.profiles;
 create policy "Users manage their own profile" on public.profiles
   for all to authenticated using ((select auth.uid()) = id) with check ((select auth.uid()) = id);
+drop policy if exists "Users manage their own Roamly data" on public.entities;
 create policy "Users manage their own Roamly data" on public.entities
   for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
