@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import type { Destination } from '../lib/data';
+import './DestinationMap.css';
 
 interface DestinationMapProps {
   places: Destination[];
@@ -103,13 +104,13 @@ export default function DestinationMap({ places, selectedId, onSelect, className
   }, [selectedId, places]);
 
   return (
-    <div className={`destination-map ${className}`} style={{ position: 'relative', height: '100%', minHeight: 360, isolation: 'isolate' }}>
-      <div ref={container} role="region" aria-label="Destination map. Use the zoom controls and select a destination marker to explore." style={{ position: 'absolute', inset: 0, background: '#e8eee8', borderRadius: 'inherit' }} />
-      {tileStatus === 'unavailable' && <div role="status" style={{ position: 'absolute', zIndex: 1000, left: 12, right: 12, bottom: 35, padding: '10px 12px', borderRadius: 10, background: '#fffdf5', color: '#334c40', boxShadow: '0 2px 12px #243a291a', fontSize: 12, lineHeight: 1.5 }}>
+    <div className={`destination-map ${className}`}>
+      <div ref={container} className="destination-map-canvas" role="region" aria-label="Destination map. Use the zoom controls and select a destination marker to explore." />
+      {tileStatus === 'unavailable' && <div className="destination-map-notice" role="status">
         Some map tiles could not load. Destination markers use saved coordinates.{' '}
-        <button type="button" onClick={() => tiles.current?.redraw()} style={{ border: 0, padding: 0, color: '#245c47', background: 'transparent', textDecoration: 'underline', cursor: 'pointer', font: 'inherit', fontWeight: 700 }}>Retry map</button>
+        <button type="button" onClick={() => tiles.current?.redraw()}>Retry map</button>
       </div>}
-      {!places.length && <div role="status" style={{ position: 'absolute', zIndex: 999, left: '50%', top: '50%', transform: 'translate(-50%, -50%)', padding: '12px 18px', borderRadius: 12, background: '#fff', color: '#334c40', fontSize: 13, textAlign: 'center' }}>No destinations match your filters.</div>}
+      {!places.length && <div className="destination-map-empty" role="status">No destinations match your filters.</div>}
     </div>
   );
 }

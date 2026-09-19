@@ -67,6 +67,8 @@ import { hasIntentExpansion, intentScore } from "./lib/search";
 import { remainingRange } from "./lib/planner";
 import { supabase } from "./lib/supabase";
 import { signOutAndLoadGuest } from "./lib/sessionRecovery";
+import { useTheme } from "./lib/useTheme";
+import ThemeSwitcher from "./components/ThemeSwitcher";
 import {
   api,
   currencies,
@@ -201,6 +203,7 @@ function EmptyState({
   );
 }
 function App() {
+  const theme = useTheme();
   const initialAuthMode = (() => {
     const params = new URLSearchParams(window.location.search);
     return params.has("resetToken") || params.get("recovery") === "password"
@@ -436,6 +439,7 @@ function App() {
   if (!session)
     return (
       <div className="loading-screen">
+        <div className="loading-theme"><ThemeSwitcher {...theme} /></div>
         <div className="brand">
           <span className="brand-icon">
             <Navigation size={25} />
@@ -766,6 +770,7 @@ function App() {
               )}
             </div>
             <div className="header-divider" />
+            <ThemeSwitcher {...theme} />
             <button
               className="icon-button notification-button"
               aria-label="Notifications"
