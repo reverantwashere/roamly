@@ -66,6 +66,7 @@ import { normalizePersonality } from "./lib/preferences";
 import { hasIntentExpansion, intentScore } from "./lib/search";
 import { remainingRange } from "./lib/planner";
 import { supabase } from "./lib/supabase";
+import { signOutAndLoadGuest } from "./lib/sessionRecovery";
 import {
   api,
   currencies,
@@ -208,6 +209,8 @@ function App() {
   })() as AuthMode | undefined;
   const [session, setSession] = useState<Session | null>(null);
   const [loadError, setLoadError] = useState("");
+  const [loadRecovery, setLoadRecovery] = useState<"retry" | "signout" | null>(null);
+  const [loadRecoveryError, setLoadRecoveryError] = useState("");
   const [page, setPage] = useState<Page>(pageFromLocation);
   const [modal, setModal] = useState<ModalType>(initialAuthMode ? "auth" : null);
   const [authMode, setAuthMode] = useState<AuthMode | undefined>(initialAuthMode);
@@ -441,13 +444,47 @@ function App() {
         </div>
         {loadError ? (
           <>
-            <p>{loadError}</p>
+            <p role="alert">{loadError}</p>
             <button
               className="button primary"
-              onClick={() => refresh().catch(() => {})}
+              disabled={loadRecovery !== null}
+              onClick={async () => {
+                setLoadRecovery("retry");
+                setLoadRecoveryError("");
+                try { await refresh(); } catch { /* Keep the loading error visible. */ }
+                finally { setLoadRecovery(null); }
+              }}
             >
+              {loadRecovery === "retry" && <LoaderCircle size={15} className="spin" />}
               Try again
             </button>
+            {supabase && (
+              <button
+                className="button secondary"
+                disabled={loadRecovery !== null}
+                onClick={async () => {
+                  if (!supabase) return;
+                  setLoadRecovery("signout");
+                  setLoadRecoveryError("");
+                  try {
+                    const guest = await signOutAndLoadGuest(supabase.auth, () => api<Session>("/session"));
+                    setSession(guest);
+                    setLoadError("");
+                    setAuthMode(undefined);
+                    closeModal();
+                    navigate("home");
+                  } catch (error) {
+                    setLoadRecoveryError((error as Error).message);
+                  } finally {
+                    setLoadRecovery(null);
+                  }
+                }}
+              >
+                {loadRecovery === "signout" ? <LoaderCircle size={15} className="spin" /> : <LogOut size={15} />}
+                Sign out and browse
+              </button>
+            )}
+            {loadRecoveryError && <p role="alert">{loadRecoveryError}</p>}
           </>
         ) : (
           <>

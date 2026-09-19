@@ -9,6 +9,7 @@ Roamly uses Supabase for hosted user accounts and application data. Cloudflare P
    - [`202609190001_roamly.sql`](../supabase/migrations/202609190001_roamly.sql): profiles, entity storage, and owner-only policies.
    - [`202609190002_account_delete_rpc.sql`](../supabase/migrations/202609190002_account_delete_rpc.sql): self-service account deletion.
    - [`202609190003_atomic_account_data.sql`](../supabase/migrations/202609190003_atomic_account_data.sql): atomic fuel recording, related-record deletion, saved-place toggles, and hardened account deletion. Apply this before deploying the hosted data adapter.
+   - [`202609190004_authenticated_table_access.sql`](../supabase/migrations/202609190004_authenticated_table_access.sql): explicit table permissions for signed-in users. Owner-only RLS policies still control which records each user can access.
 3. In **Authentication → URL Configuration**, add your local address and the Cloudflare Pages production and preview URLs as redirect URLs.
 4. In **Authentication → Providers**, enable Email and keep email confirmation enabled. Google, Apple, and passkeys are optional future integrations; the current signup dialog uses email and password.
 
@@ -57,4 +58,4 @@ Cloudflare Pages will deploy preview builds for pull requests and production bui
 
 ## Existing project upgrade
 
-For an existing project, apply only the missing migrations in order. The third migration replaces functions without deleting existing user records. Its functions use the signed-in user's identity; never expose a service-role key in the browser. A successful Pages build does not apply SQL migrations automatically.
+For an existing project, apply only the missing migrations in order. The third migration replaces functions without deleting existing user records; the fourth makes authenticated table access explicit rather than relying on project defaults. Functions use the signed-in user's identity; never expose a service-role key in the browser. A successful Pages build does not apply SQL migrations automatically.

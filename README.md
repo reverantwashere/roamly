@@ -33,7 +33,7 @@ Run the build before `npm start`. `npm run preview` previews only the frontend b
 
 ## Hosted beta
 
-The target hosted stack is **Supabase + Cloudflare Pages**. See [the deployment guide](docs/SUPABASE_CLOUDFLARE.md) for the database migration, authentication setup, and Pages settings.
+The target hosted stack is **Supabase + Cloudflare Pages**. See [the deployment guide](docs/SUPABASE_CLOUDFLARE.md) for the database migration, authentication setup, and Pages settings. Apply every SQL file in `supabase/migrations/` in filename order, including `202609190004_authenticated_table_access.sql`; its explicit table grants let signed-in users load and save their own data while the existing RLS policies enforce ownership.
 - `server/providers.js`: a provider contract that reports unavailable integrations explicitly. Keep future provider credentials on the server.
 
 The architecture remains extensible beyond Kerala and India: profiles and trips keep explicit country and currency fields, maps use global coordinates, and service adapters can be replaced. Additional regions, translated interfaces, reliable local information, and currency conversion require further implementation and validation rather than a change to the launch scope.
