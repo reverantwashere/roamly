@@ -157,6 +157,7 @@ function App() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("For you");
   const [mapView, setMapView] = useState(false);
+  const [locationOpen, setLocationOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expenseTrip, setExpenseTrip] = useState("all");
   const [expenseCurrency, setExpenseCurrency] = useState("INR");
@@ -221,6 +222,21 @@ function App() {
           ? "A little inspiration, saved."
           : "Place removed from your collection.",
       );
+    } catch (e) {
+      notify((e as Error).message);
+    }
+  }
+  async function chooseLocation(city: string) {
+    setLocationOpen(false);
+    if (user.isGuest) {
+      setSession((current) => current ? { ...current, profile: { ...current.profile, city } } : current);
+      notify(`Showing Roamly from ${city}.`);
+      return;
+    }
+    try {
+      await api("/profile", { ...profile, city }, "PUT");
+      await refresh();
+      notify(`Home location changed to ${city}.`);
     } catch (e) {
       notify((e as Error).message);
     }
@@ -458,14 +474,34 @@ function App() {
                 }}
               />
             </div>
-            <button
-              className="location-button"
-              onClick={() => navigate("profile")}
-            >
-              <MapPin size={15} />
-              <span>{profile.city || "Set your city"}</span>
-              <ChevronDown size={12} />
-            </button>
+            <div className={`location-picker ${locationOpen ? "open" : ""}`}>
+              <button
+                className="location-button"
+                onClick={() => setLocationOpen((open) => !open)}
+                aria-haspopup="listbox"
+                aria-expanded={locationOpen}
+              >
+                <MapPin size={15} />
+                <span>{profile.city || "Set your city"}</span>
+                <ChevronDown size={12} />
+              </button>
+              {locationOpen && (
+                <div className="location-dropdown" role="listbox" aria-label="Choose your Kerala location">
+                  <span>YOUR AREA</span>
+                  {["Kochi", "Thiruvananthapuram", "Kozhikode", "Thrissur", "Munnar"].map((city) => (
+                    <button key={city} role="option" aria-selected={profile.city === city} onClick={() => chooseLocation(city)}>
+                      <MapPin size={13} />
+                      {city}
+                      {profile.city === city && <Check size={13} />}
+                    </button>
+                  ))}
+                  <button className="location-edit" onClick={() => { setLocationOpen(false); navigate("profile"); }}>
+                    Edit full travel profile
+                    <ArrowRight size={13} />
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="header-divider" />
             <button
               className="icon-button notification-button"
