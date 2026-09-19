@@ -54,7 +54,7 @@ test('numeric budgets are allocated in the selected currency without implied con
 })
 
 test('Kerala catalogue uses local INR estimates while the schema allows other currencies', () => {
-  assert.equal(destinations.length, 9)
+  assert.ok(destinations.length >= 20)
   assert.ok(destinations.every((destination) => destination.region === 'Kerala' && destination.country === 'India' && destination.costCurrency === 'INR'))
   const local = buildItinerary(destinations[0], 1)
   assert.equal(local[0].activities[0].currency, 'INR')

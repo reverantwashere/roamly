@@ -10,6 +10,8 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  BedDouble,
+  Building2,
   CalendarDays,
   CarFront,
   Check,
@@ -36,17 +38,29 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  ShoppingBag,
   SlidersHorizontal,
   Sparkles,
   Sprout,
   Sun,
   Trash2,
   Users,
+  UtensilsCrossed,
   Wallet,
   Waves,
   X,
 } from "lucide-react";
-import { destinations, distanceFromHometown, keralaHometowns, type Destination } from "./lib/data";
+import {
+  destinations,
+  discoveryItems,
+  distanceFromHometown,
+  keralaDistricts,
+  keralaHometowns,
+  type BudgetTier,
+  type Destination,
+  type DiscoveryKind,
+} from "./lib/data";
+import { hasIntentExpansion, intentScore } from "./lib/search";
 import { remainingRange } from "./lib/planner";
 import {
   api,
@@ -117,6 +131,15 @@ const categoryOptions = [
   { name: "Adventure", icon: Mountain },
   { name: "Culture", icon: Globe2 },
   { name: "Coast", icon: Waves },
+  { name: "City", icon: Building2 },
+];
+type ExploreMode = "Places" | DiscoveryKind;
+const exploreModes: { name: ExploreMode; icon: typeof Compass }[] = [
+  { name: "Places", icon: Compass },
+  { name: "Activities", icon: Sparkles },
+  { name: "Food", icon: UtensilsCrossed },
+  { name: "Shopping", icon: ShoppingBag },
+  { name: "Stays", icon: BedDouble },
 ];
 function IconBox({
   icon: Icon,
@@ -171,6 +194,9 @@ function App() {
   const [toast, setToast] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("For you");
+  const [exploreMode, setExploreMode] = useState<ExploreMode>("Places");
+  const [exploreDistrict, setExploreDistrict] = useState("All Kerala");
+  const [stayBudget, setStayBudget] = useState<BudgetTier>("Balanced");
   const [mapView, setMapView] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -199,6 +225,25 @@ function App() {
       setModal("onboarding");
     }
   }, [session, modal]);
+  useEffect(() => {
+    const savedBudget = session?.profile.budget;
+    if (["Budget", "Balanced", "Comfort", "Luxury"].includes(String(savedBudget))) {
+      setStayBudget(savedBudget as BudgetTier);
+    }
+  }, [session?.profile.budget]);
+  useEffect(() => {
+    const nextTrip = session?.trips.find(
+      (trip) => trip.status?.toLowerCase() !== "completed",
+    );
+    const tripPlace = destinations.find(
+      (place) => place.name === nextTrip?.destination,
+    );
+    if (tripPlace?.district && !nextTrip?.isExample) {
+      setExploreDistrict((current) =>
+        current === "All Kerala" ? tripPlace.district : current,
+      );
+    }
+  }, [session?.trips]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4500);
@@ -332,14 +377,50 @@ function App() {
   });
   const matchedPlaces = (
     category === "For you" ? personalizedPlaces : nearbyPlaces
-  ).filter(
-    (p) =>
-      (category === "For you" || p.category === category) &&
-      (!search ||
-        `${p.name} ${p.country} ${p.tags.join(" ")}`
-          .toLowerCase()
-          .includes(search.toLowerCase())),
-  );
+  )
+    .filter((place) => category === "For you" || place.category === category)
+    .map((place) => ({
+      place,
+      score: intentScore(search, [
+        place.name,
+        place.country,
+        place.region,
+        place.district,
+        place.category,
+        place.description,
+        place.tags.join(" "),
+        place.personality.join(" "),
+        `${place.crowd} crowds`,
+        place.quietTime,
+      ]),
+    }))
+    .filter(({ score }) => !search || score > 0)
+    .sort((a, b) => (search ? b.score - a.score : 0))
+    .map(({ place }) => place);
+  const matchedDiscoveries = discoveryItems
+    .filter((item) => item.kind === exploreMode)
+    .filter(
+      (item) =>
+        exploreDistrict === "All Kerala" || item.district === exploreDistrict,
+    )
+    .filter(
+      (item) => exploreMode !== "Stays" || item.budgetTiers.includes(stayBudget),
+    )
+    .map((item) => ({
+      item,
+      score: intentScore(search, [
+        item.title,
+        item.kind,
+        item.district,
+        item.locality,
+        item.description,
+        item.tags.join(" "),
+        item.budgetTiers.join(" "),
+      ]),
+    }))
+    .filter(({ score }) => !search || score > 0)
+    .sort((a, b) => (search ? b.score - a.score : 0))
+    .map(({ item }) => item);
   const featuredPlace = personalizedPlaces[0] || destinations[0];
   const interests = profile.interests?.length
     ? profile.interests
@@ -655,6 +736,32 @@ function App() {
                   </button>
                 </section>
               </div>
+              <section className="roamly-value">
+                <div>
+                  <span className="eyebrow">WHY ROAMLY</span>
+                  <h2>One Kerala plan, shaped around you.</h2>
+                  <p>
+                    Start with how you like to travel. Roamly connects nearby
+                    places, things to do, food, shopping, and stays to your
+                    district and budget—then turns them into one personal trip.
+                  </p>
+                </div>
+                <div className="value-points">
+                  <span><MapPin size={15} /> Near your area</span>
+                  <span><SlidersHorizontal size={15} /> Matches your pace</span>
+                  <span><Wallet size={15} /> Fits your budget</span>
+                </div>
+                <button
+                  className="button secondary"
+                  onClick={() => {
+                    setExploreMode("Activities");
+                    navigate("explore");
+                  }}
+                >
+                  Explore the district guide
+                  <ArrowRight size={15} />
+                </button>
+              </section>
               <section className="recommendations">
                 <div className="section-title">
                   <div>
@@ -934,7 +1041,7 @@ function App() {
                   <p>
                     {page === "saved"
                       ? "Dreams worth coming back to. Where will the next one take you?"
-                      : "Discover a peaceful corner, a new perspective, or your next great story."}
+                      : `${destinations.length} curated places, plus district guides for activities, food, shopping, and stays.`}
                   </p>
                 </div>
                 <button className="button primary" onClick={() => planner()}>
@@ -942,16 +1049,80 @@ function App() {
                   Plan a trip
                 </button>
               </div>
+              {page === "explore" && (
+                <div className="explore-mode-tabs" role="tablist" aria-label="Explore Kerala">
+                  {exploreModes.map(({ name, icon: Icon }) => (
+                    <button
+                      key={name}
+                      role="tab"
+                      aria-selected={exploreMode === name}
+                      className={exploreMode === name ? "active" : ""}
+                      onClick={() => {
+                        setExploreMode(name);
+                        if (name !== "Places") setMapView(false);
+                      }}
+                    >
+                      <Icon size={16} />
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="explore-search">
                 <Search size={17} />
                 <input
-                  aria-label="Search places in Kerala"
-                  placeholder="Find a place, an experience, a little inspiration…"
+                  aria-label="Search Kerala by place or travel vibe"
+                  placeholder="Try ‘cool’, ‘modern’, ‘romantic’, a district, or a place…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
                 <span>KERALA, INDIA</span>
               </div>
+              {page === "explore" && !search && (
+                <div className="search-ideas" aria-label="Search ideas">
+                  <span>Search by feeling</span>
+                  {["Cool", "Modern", "Romantic", "Family", "Foodie"].map((idea) => (
+                    <button key={idea} onClick={() => setSearch(idea.toLowerCase())}>
+                      {idea}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {page === "explore" && (
+                <div className="area-filters">
+                  <label>
+                    District
+                    <select
+                      value={exploreDistrict}
+                      onChange={(e) => setExploreDistrict(e.target.value)}
+                    >
+                      <option>All Kerala</option>
+                      {keralaDistricts.map((district) => (
+                        <option key={district}>{district}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {exploreMode === "Stays" && (
+                    <label>
+                      Match my budget
+                      <select
+                        value={stayBudget}
+                        onChange={(e) => setStayBudget(e.target.value as BudgetTier)}
+                      >
+                        {(["Budget", "Balanced", "Comfort", "Luxury"] as BudgetTier[]).map((tier) => (
+                          <option key={tier}>{tier}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <span>
+                    {exploreDistrict === "All Kerala"
+                      ? "Showing ideas across Kerala"
+                      : `Showing ideas for ${exploreDistrict}`}
+                  </span>
+                </div>
+              )}
+              {(page === "saved" || exploreMode === "Places") && (
               <div className="explore-toolbar">
                 <div className="category-tabs">
                   {categoryOptions.map(({ name, icon: Icon }) => (
@@ -984,9 +1155,15 @@ function App() {
                   </button>
                 </div>
               </div>
+              )}
               {search && (
                 <p className="search-summary">
-                  Results for “{search}”
+                  <span>
+                    Results for “{search}”
+                    {hasIntentExpansion(search) && (
+                      <small> · matching the feeling, not only the exact word</small>
+                    )}
+                  </span>
                   <button className="text-button" onClick={() => setSearch("")}>
                     Clear search
                     <X size={13} />
@@ -995,8 +1172,72 @@ function App() {
               )}
               {(() => {
                 const places = matchedPlaces.filter(
-                  (p) => page !== "saved" || savedPlaces.includes(p.id),
+                  (place) =>
+                    (page === "saved" ||
+                      exploreDistrict === "All Kerala" ||
+                      place.district === exploreDistrict) &&
+                    (page !== "saved" || savedPlaces.includes(place.id)),
                 );
+                if (page === "explore" && exploreMode !== "Places") {
+                  return matchedDiscoveries.length ? (
+                    <div className="discovery-grid">
+                      {matchedDiscoveries.map((item) => {
+                        const Icon =
+                          item.kind === "Activities"
+                            ? Sparkles
+                            : item.kind === "Food"
+                              ? UtensilsCrossed
+                              : item.kind === "Shopping"
+                                ? ShoppingBag
+                                : BedDouble;
+                        const nearby = destinations.find(
+                          (place) => place.district === item.district,
+                        );
+                        return (
+                          <article className="discovery-card" key={item.id}>
+                            <div className="discovery-card-heading">
+                              <span className="discovery-icon"><Icon size={18} /></span>
+                              <span className="tag sage">{item.kind}</span>
+                            </div>
+                            <span className="place-location">
+                              <MapPin size={12} />
+                              {item.locality} · {item.district}
+                            </span>
+                            <h3>{item.title}</h3>
+                            <p>{item.description}</p>
+                            <div className="discovery-tags">
+                              {item.tags.slice(0, 3).map((tag) => (
+                                <span key={tag}>{tag}</span>
+                              ))}
+                            </div>
+                            <div className="discovery-card-footer">
+                              <span>{item.priceHint}</span>
+                              {nearby && (
+                                <button onClick={() => planner(nearby)}>
+                                  Plan in {item.district}
+                                  <ArrowUpRight size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <EmptyState
+                      icon={Search}
+                      title="Try a wider area."
+                      description={`No ${exploreMode.toLowerCase()} match these filters yet. Choose All Kerala, another budget, or a different travel feeling.`}
+                      action={{
+                        label: "Show all Kerala",
+                        onClick: () => {
+                          setExploreDistrict("All Kerala");
+                          setSearch("");
+                        },
+                      }}
+                    />
+                  );
+                }
                 return places.length ? (
                   mapView ? (
                     <div className="explore-map-layout">
@@ -1901,6 +2142,25 @@ function App() {
             distances, opening hours, and conditions before travelling.
           </p>
           <div className="modal-actions">
+            {destinations.find(
+              (place) => place.name === selectedTrip.destination,
+            ) && (
+              <button
+                className="button secondary"
+                onClick={() => {
+                  const place = destinations.find(
+                    (candidate) => candidate.name === selectedTrip.destination,
+                  );
+                  setExploreDistrict(place?.district || "All Kerala");
+                  setExploreMode("Activities");
+                  closeModal();
+                  navigate("explore");
+                }}
+              >
+                <Compass size={15} />
+                Explore around this trip
+              </button>
+            )}
             <button
               className="button danger-plain"
               onClick={() => setModal("deleteTrip")}
