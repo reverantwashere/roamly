@@ -17,7 +17,7 @@ import {
   Wallet,
 } from "lucide-react";
 import Modal from "./Modal";
-import { destinations, type Destination } from "../lib/data";
+import { destinations, keralaHometowns, type Destination } from "../lib/data";
 import { buildItinerary, fuelCost } from "../lib/planner";
 import { supabase } from "../lib/supabase";
 import {
@@ -43,15 +43,36 @@ export function AuthModal({
   onClose: () => void;
   onSuccess: (s: Session) => void;
 }) {
-  const [mode, setMode] = useState<"signup" | "login" | "forgot" | "reset">(
+  const [mode, setMode] = useState<
+    "signup" | "verify" | "login" | "forgot" | "reset"
+  >(
     new URLSearchParams(window.location.search).has("resetToken")
       ? "reset"
       : "signup",
   );
+  const [pendingEmail, setPendingEmail] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [show, setShow] = useState(false);
+  async function resendSignupCode() {
+    if (!supabase || !pendingEmail) return;
+    setError("");
+    setNotice("");
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: pendingEmail,
+      });
+      if (error) throw error;
+      setNotice("A new six-digit code is on its way.");
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
@@ -77,19 +98,35 @@ export function AuthModal({
         window.history.replaceState({}, "", cleanUrl);
         setMode("login");
         setNotice("Password updated. Sign in with your new password.");
+      } else if (mode === "verify") {
+        if (!supabase || !pendingEmail)
+          throw new Error("Start your signup again to request a new code.");
+        const token = String(data.token || "").replace(/\D/g, "");
+        if (token.length !== 6)
+          throw new Error("Enter the six-digit code from your email.");
+        const { error } = await supabase.auth.verifyOtp({
+          email: pendingEmail,
+          token,
+          type: "email",
+        });
+        if (error) throw error;
+        onSuccess(await api<Session>("/session"));
       } else {
         if (!supabase) {
           const result = await api<Session>(`/auth/${mode}`, data);
           onSuccess(result);
         } else if (mode === "signup") {
+          const email = String(data.email).trim().toLowerCase();
           const { data: signedUp, error } = await supabase.auth.signUp({
-            email: String(data.email), password: String(data.password),
+            email,
+            password: String(data.password),
             options: { data: { name: String(data.name) }, emailRedirectTo: window.location.origin },
           });
           if (error) throw error;
           if (!signedUp.session) {
-            setNotice("Check your email to confirm your Roamly account, then sign in.");
-            setMode("login");
+            setPendingEmail(email);
+            setNotice("We sent a six-digit verification code to your email.");
+            setMode("verify");
           } else {
             onSuccess(await api<Session>("/session"));
           }
@@ -110,6 +147,8 @@ export function AuthModal({
       title={
         mode === "signup"
           ? "A world of your own."
+          : mode === "verify"
+            ? "One small step."
           : mode === "login"
             ? "Welcome back."
             : mode === "forgot"
@@ -119,6 +158,8 @@ export function AuthModal({
       subtitle={
         mode === "signup"
           ? "Create your Roamly account and keep your journeys together."
+          : mode === "verify"
+            ? `Enter the six-digit code sent to ${pendingEmail}.`
           : mode === "login"
             ? "Your next journey is right where you left it."
             : "Secure access to your travel space."
@@ -166,7 +207,7 @@ export function AuthModal({
             />
           </label>
         )}
-        {mode !== "reset" && (
+        {(mode === "signup" || mode === "login" || mode === "forgot") && (
           <label>
             Email address
             <input
@@ -175,6 +216,23 @@ export function AuthModal({
               autoComplete="email"
               placeholder="you@example.com"
               required
+            />
+          </label>
+        )}
+        {mode === "verify" && (
+          <label>
+            Verification code
+            <input
+              name="token"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              placeholder="000000"
+              minLength={6}
+              maxLength={6}
+              pattern="[0-9]{6}"
+              required
+              autoFocus
             />
           </label>
         )}
@@ -192,7 +250,7 @@ export function AuthModal({
             />
           </label>
         )}
-        {mode !== "forgot" && (
+        {(mode === "signup" || mode === "login" || mode === "reset") && (
           <label>
             Password
             <div className="password-input">
@@ -226,6 +284,8 @@ export function AuthModal({
           {busy ? <LoaderCircle className="spin" size={17} /> : null}
           {mode === "signup"
             ? "Create my account"
+            : mode === "verify"
+              ? "Verify my email"
             : mode === "login"
               ? "Sign in"
               : mode === "forgot"
@@ -244,6 +304,30 @@ export function AuthModal({
           >
             Forgot your password?
           </button>
+        )}
+        {mode === "verify" && (
+          <>
+            <button
+              type="button"
+              className="text-button"
+              onClick={resendSignupCode}
+              disabled={busy}
+            >
+              Send another code
+            </button>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => {
+                setMode("signup");
+                setPendingEmail("");
+                setError("");
+                setNotice("");
+              }}
+            >
+              Use a different email
+            </button>
+          </>
         )}
         {mode === "forgot" && (
           <button
@@ -288,7 +372,9 @@ export function OnboardingModal({
   const [group, setGroup] = useState(profile.group || "Solo");
   const [transport, setTransport] = useState(profile.transport || "Car");
   const [budget, setBudget] = useState(profile.budget || "Balanced");
-  const [city, setCity] = useState(profile.city || "");
+  const [city, setCity] = useState(
+    profile.onboarded === true ? profile.city || "" : "",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const choices = (items: string[], value: string, setValue: (v: string) => void) => (
@@ -306,11 +392,11 @@ export function OnboardingModal({
   return (
     <Modal title="Make Roamly yours." subtitle={`A few quick choices so every suggestion feels more like you. Step ${step} of 3.`} onClose={() => {}} wide>
       <div className="onboarding-progress"><span className={step >= 1 ? "active" : ""} /><span className={step >= 2 ? "active" : ""} /><span className={step >= 3 ? "active" : ""} /></div>
-      {step === 1 && <div className="onboarding-step"><h3>What kind of journey feels right?</h3><p>Pick the pace you reach for most often.</p>{choices(["Peace-seeking", "Adventure-seeking", "A thoughtful mix", "Lively and social", "Flexible"], personality, setPersonality)}<label>Home city<input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Kochi" maxLength={100} /></label></div>}
+      {step === 1 && <div className="onboarding-step"><h3>What kind of journey feels right?</h3><p>Pick the pace you reach for most often.</p>{choices(["Peace-seeking", "Adventure-seeking", "A thoughtful mix", "Lively and social", "Flexible"], personality, setPersonality)}<label>Home city in Kerala<select value={city} onChange={(e) => setCity(e.target.value)} required><option value="" disabled>Select your hometown</option>{keralaHometowns.map(([name]) => <option key={name} value={name}>{name}</option>)}</select></label></div>}
       {step === 2 && <div className="onboarding-step"><h3>What draws you in?</h3><p>Choose as many as you like.</p><div className="onboarding-choices">{["Nature", "Adventure", "Culture", "Food", "Coast", "Photography", "Wellness", "Wildlife"].map((item) => <button type="button" key={item} className={interests.includes(item) ? "selected" : ""} onClick={() => setInterests((v) => v.includes(item) ? v.filter((x) => x !== item) : [...v, item])}>{interests.includes(item) && <Check size={14} />}{item}</button>)}</div></div>}
       {step === 3 && <div className="onboarding-step"><h3>How do you usually travel?</h3><p>We’ll shape practical suggestions around this.</p><label>Usually travelling with{choices(["Solo", "Couple", "Family", "Friends", "Group"], group, setGroup)}</label><label>Preferred transport{choices(["Car", "Motorcycle", "Public transport", "Walking", "Mixed"], transport, setTransport)}</label><label>Budget style{choices(["Budget", "Balanced", "Comfort", "Luxury"], budget, setBudget)}</label></div>}
       <ErrorMessage error={error} />
-      <div className="modal-actions onboarding-actions">{step > 1 && <button className="button secondary" onClick={() => setStep(step - 1)}>Back</button>}<button className="button primary" disabled={busy || (step === 2 && !interests.length)} onClick={() => step < 3 ? setStep(step + 1) : finish()}>{busy ? <LoaderCircle className="spin" size={17} /> : step === 3 ? "Start exploring" : "Continue"}<ArrowRight size={16} /></button></div>
+      <div className="modal-actions onboarding-actions">{step > 1 && <button className="button secondary" onClick={() => setStep(step - 1)}>Back</button>}<button className="button primary" disabled={busy || (step === 1 && !city) || (step === 2 && !interests.length)} onClick={() => step < 3 ? setStep(step + 1) : finish()}>{busy ? <LoaderCircle className="spin" size={17} /> : step === 3 ? "Start exploring" : "Continue"}<ArrowRight size={16} /></button></div>
     </Modal>
   );
 }

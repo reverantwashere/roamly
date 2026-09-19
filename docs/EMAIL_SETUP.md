@@ -2,6 +2,8 @@
 
 Roamly verifies a new password account by sending a six-digit code to its email address. The browser receives a restricted verification cookie; the account does not receive an authenticated session until the code is accepted. Converting a guest account keeps its saved work but revokes the guest session while verification is pending. Google and Apple accounts use a provider-verified email claim when one is available.
 
+For the hosted Supabase and Cloudflare build, set the **Confirm sign up** template subject to `Your Roamly verification code` and paste [`supabase/templates/confirm-signup.html`](../supabase/templates/confirm-signup.html) into the Supabase template source editor. The template uses `{{ .Token }}` so the app can verify the six-digit code rather than requiring a confirmation link. Configure custom SMTP before a public beta; Supabase's default sender is limited to testing with authorized team addresses.
+
 Email is also available as the second step after a primary sign-in. Authenticator apps and recovery codes remain separate security options. Phone verification is deferred: a phone number is not required for signup and no SMS is sent.
 
 ## Development

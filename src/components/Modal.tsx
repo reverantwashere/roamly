@@ -14,6 +14,10 @@ export default function Modal({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement;
     const old = document.body.style.overflow;
@@ -21,7 +25,7 @@ export default function Modal({
     const node = ref.current;
     node?.focus();
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
       if (e.key === "Tab") {
         const focusables = node?.querySelectorAll<HTMLElement>(
           "button:not(:disabled),input,select,textarea,a[href]",
@@ -47,7 +51,7 @@ export default function Modal({
       document.removeEventListener("keydown", key);
       previous?.focus();
     };
-  }, [onClose]);
+  }, []);
   return (
     <div
       className="modal-overlay"
