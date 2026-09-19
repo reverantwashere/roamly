@@ -6,6 +6,9 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { exampleProfile, exampleEntities } from './seeds.js';
 import { createProviders } from './providers.js';
+import { installSecurity } from './security.js';
+import { installOAuthRoutes } from './oauth.js';
+import { installEmailAuth } from './email-auth.js';
 
 const scrypt = promisify(scryptCallback);
 const COOKIE = 'roamly_session';
@@ -156,11 +159,17 @@ export function createApp(options = {}) {
       token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at INTEGER NOT NULL
     );
   `);
+  // SQLite migrations preserve existing beta accounts and sessions.
+  const userColumns = new Set(db.prepare('PRAGMA table_info(users)').all().map((column) => column.name));
+  if (!userColumns.has('email_verified_at')) db.exec('ALTER TABLE users ADD COLUMN email_verified_at TEXT');
+  const sessionColumns = new Set(db.prepare('PRAGMA table_info(sessions)').all().map((column) => column.name));
+  if (!sessionColumns.has('authenticated_at')) db.exec('ALTER TABLE sessions ADD COLUMN authenticated_at INTEGER NOT NULL DEFAULT 0');
+  if (!sessionColumns.has('method')) db.exec("ALTER TABLE sessions ADD COLUMN method TEXT NOT NULL DEFAULT 'legacy'");
+  db.exec('CREATE TABLE IF NOT EXISTS auth_attempts (identifier TEXT PRIMARY KEY, count INTEGER NOT NULL, until_at INTEGER NOT NULL)');
   const app = express();
   const providers = createProviders(options.providers);
   const production = options.production ?? process.env.NODE_ENV === 'production';
-  const appOrigin = options.appOrigin ?? process.env.APP_ORIGIN;
-  const attempts = new Map();
+  const appOrigin = options.appOrigin ?? process.env.APP_ORIGIN ?? 'http://localhost:5173';
   const entities = (userId, kind) => db.prepare('SELECT data FROM entities WHERE user_id=? AND kind=? ORDER BY created_at, id').all(userId, kind).map((row) => JSON.parse(row.data));
   const getEntity = (userId, kind, id) => {
     const row = db.prepare('SELECT data FROM entities WHERE user_id=? AND kind=? AND id=?').get(userId, kind, id);
@@ -200,11 +209,11 @@ export function createApp(options = {}) {
       savedPlaces: entities(userId, 'savedPlaces').map((item) => item.placeId),
     };
   };
-  function setSession(res, userId, oldToken) {
+  function setSession(res, userId, oldToken, method = 'password') {
     if (oldToken) db.prepare('DELETE FROM sessions WHERE token_hash=?').run(sha(oldToken));
     const token = randomBytes(32).toString('base64url');
     const maxAge = 30 * 24 * 60 * 60 * 1000;
-    db.prepare('INSERT INTO sessions VALUES (?,?,?)').run(sha(token), userId, Date.now() + maxAge);
+    db.prepare('INSERT INTO sessions (token_hash,user_id,expires_at,authenticated_at,method) VALUES (?,?,?,?,?)').run(sha(token), userId, Date.now() + maxAge, method === 'guest' ? 0 : Date.now(), method);
     res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: production, path: '/', maxAge });
   }
   function makeGuest(res) {
@@ -213,32 +222,38 @@ export function createApp(options = {}) {
     const seed = exampleEntities();
     db.exec('BEGIN');
     try {
-      db.prepare('INSERT INTO users VALUES (?,?,?,?,?,?,?)').run(id, profile.name, null, null, 1, JSON.stringify(profile), new Date().toISOString());
+      db.prepare('INSERT INTO users (id,name,email,password_hash,is_guest,profile,created_at) VALUES (?,?,?,?,?,?,?)').run(id, profile.name, null, null, 1, JSON.stringify(profile), new Date().toISOString());
       for (const kind of ['trips', 'vehicles', 'expenses']) for (const item of seed[kind]) {
         db.prepare('INSERT INTO entities VALUES (?,?,?,?,?)').run(item.id, id, kind, JSON.stringify(item), new Date().toISOString());
       }
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
-    setSession(res, id);
+    setSession(res, id, undefined, 'guest');
     return id;
   }
   function rateLimit(req, key, limit = 12) {
     const now = Date.now();
-    const identifier = `${key}:${req.ip}`;
-    const previous = attempts.get(identifier);
-    const entry = previous && previous.until > now ? previous : { count: 0, until: now + 15 * 60 * 1000 };
-    entry.count += 1;
-    attempts.set(identifier, entry);
-    if (attempts.size > 10000) for (const [k, v] of attempts) if (v.until < now) attempts.delete(k);
-    if (entry.count > limit) throw fail('Too many attempts. Please try again in 15 minutes.', 429);
+    const identifier = sha(`${key}:${req.ip}`);
+    db.prepare('DELETE FROM auth_attempts WHERE until_at<=?').run(now);
+    const previous = db.prepare('SELECT count,until_at FROM auth_attempts WHERE identifier=?').get(identifier);
+    const entry = previous ?? { count: 0, until_at: now + 15 * 60 * 1000 };
+    db.prepare('INSERT INTO auth_attempts VALUES (?,?,?) ON CONFLICT(identifier) DO UPDATE SET count=excluded.count,until_at=excluded.until_at').run(identifier, entry.count + 1, entry.until_at);
+    if (entry.count >= limit) throw fail('Too many attempts. Please try again in 15 minutes.', 429);
+  }
+  function revokeSession(req, res) {
+    if (req.sessionToken) db.prepare('DELETE FROM sessions WHERE token_hash=?').run(sha(req.sessionToken));
+    res.clearCookie(COOKIE, { httpOnly: true, sameSite: 'lax', secure: production, path: '/' });
   }
   app.disable('x-powered-by');
   app.use('/api', (req, res, next) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' });
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      // Apple's signed form_post callback is the only cross-site form endpoint. Its state and nonce are verified by the OAuth module.
+      const appleCallback = req.method === 'POST' && req.path === '/auth/oauth/apple/callback' && req.is('application/x-www-form-urlencoded') && (!req.get('origin') || req.get('origin') === 'https://appleid.apple.com');
+      if (appleCallback) return next();
       const origin = req.get('origin');
       const allowed = appOrigin ? [appOrigin] : [`${req.protocol}://${req.get('host')}`];
-      if (!production && !appOrigin) allowed.push('http://localhost:5173', 'http://127.0.0.1:5173');
+      if (!production && !options.appOrigin && !process.env.APP_ORIGIN) allowed.push('http://localhost:5173', 'http://127.0.0.1:5173');
       if (req.get('sec-fetch-site') === 'cross-site' || (origin && !allowed.includes(origin))) return next(fail('This request origin is not allowed.', 403));
       if (['POST', 'PUT', 'PATCH'].includes(req.method) && !req.is('application/json')) return next(fail('Use application/json for this request.', 415));
     }
@@ -258,6 +273,13 @@ export function createApp(options = {}) {
   });
   const signedIn = (req, res, next) => req.userId ? next() : next(fail('Your session has expired. Please refresh and try again.', 401));
 
+  let emailAuth;
+  const security = installSecurity(app, { db, production, appOrigin, options, dbPath, fail, rateLimit, payload, setSession, revokeSession, checkPassword, getEmailAuth: () => emailAuth });
+  const { completePrimaryAuth, requireAccount, requireRecentAuth, requireDestructiveAuth } = security;
+  emailAuth = installEmailAuth(app, { db, production, appOrigin, options, fail, rateLimit, completePrimaryAuth, revokeSession, requireAccount, requireRecentAuth, emailHmacKey: security.emailHmacKey });
+  const oauth = installOAuthRoutes(app, { db, production, appOrigin, fail, rateLimit, payload, setSession, completePrimaryAuth, requireAccount, requireRecentAuth, requireDestructiveAuth, hashPassword, checkPassword, makeGuest, oauth: options.oauth });
+  app.get('/api/auth/options', (req, res) => res.json({ ...oauth.options(), passkeys: security.options(), email: emailAuth.options() }));
+
   app.get('/api/health', (req, res) => res.json({ ok: true }));
   app.get('/api/session', (req, res) => res.json(payload(req.userId || makeGuest(res))));
   app.get('/api/auth/me', signedIn, (req, res) => res.json(payload(req.userId)));
@@ -267,14 +289,14 @@ export function createApp(options = {}) {
     const address = email(req.body.email);
     const secret = password(req.body.password);
     if (db.prepare('SELECT id FROM users WHERE email=?').get(address)) throw fail('An account with this email already exists.', 409);
+    if (options.emailVerificationRequired !== false) emailAuth.assertAvailable();
     const hash = await hashPassword(secret);
     const existing = req.userId && db.prepare('SELECT is_guest, profile FROM users WHERE id=?').get(req.userId);
     const userId = existing?.is_guest ? req.userId : randomUUID();
     const profile = existing?.is_guest ? { ...JSON.parse(existing.profile), name } : { ...exampleProfile(), name };
     if (existing?.is_guest) db.prepare('UPDATE users SET name=?,email=?,password_hash=?,is_guest=0,profile=? WHERE id=?').run(name, address, hash, JSON.stringify(profile), userId);
-    else db.prepare('INSERT INTO users VALUES (?,?,?,?,?,?,?)').run(userId, name, address, hash, 0, JSON.stringify(profile), new Date().toISOString());
-    setSession(res, userId, req.sessionToken);
-    res.status(201).json(payload(userId));
+    else db.prepare('INSERT INTO users (id,name,email,password_hash,is_guest,profile,created_at) VALUES (?,?,?,?,?,?,?)').run(userId, name, address, hash, 0, JSON.stringify(profile), new Date().toISOString());
+    res.status(201).json(await completePrimaryAuth(req, res, userId, 'password'));
   });
   app.post('/api/auth/login', async (req, res) => {
     rateLimit(req, 'login');
@@ -282,12 +304,11 @@ export function createApp(options = {}) {
     const secret = password(req.body.password);
     const user = db.prepare('SELECT * FROM users WHERE email=? AND is_guest=0').get(address);
     if (!await checkPassword(secret, user?.password_hash)) throw fail('Email or password is incorrect.', 401);
-    setSession(res, user.id, req.sessionToken);
-    res.json(payload(user.id));
+    res.json(await completePrimaryAuth(req, res, user.id, 'password'));
   });
   app.post('/api/auth/logout', (req, res) => {
-    if (req.sessionToken) db.prepare('DELETE FROM sessions WHERE token_hash=?').run(sha(req.sessionToken));
-    res.clearCookie(COOKIE, { httpOnly: true, sameSite: 'lax', secure: production, path: '/' });
+    revokeSession(req, res);
+    security.clearPending(req, res);
     res.json({ ok: true });
   });
   app.post('/api/auth/forgot-password', (req, res) => {
@@ -319,6 +340,8 @@ export function createApp(options = {}) {
       if (!valid.changes) throw fail('This reset link has already been used.');
       db.prepare('UPDATE users SET password_hash=? WHERE id=?').run(hash, reset.user_id);
       db.prepare('DELETE FROM sessions WHERE user_id=?').run(reset.user_id);
+      db.prepare('DELETE FROM auth_pending WHERE user_id=?').run(reset.user_id);
+      db.prepare('DELETE FROM auth_challenges WHERE user_id=?').run(reset.user_id);
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); throw error; }
     res.json({ ok: true, message: 'Password updated. Log in with your new password.' });
@@ -397,9 +420,11 @@ export function createApp(options = {}) {
   app.get('/api/providers', (req, res) => res.json({ providers: Object.fromEntries(Object.entries(providers).map(([key, provider]) => [key, { configured: provider.configured, provenance: provider.configured ? 'PROVIDER' : 'UNAVAILABLE' }])) }));
   app.get('/api/account/export', signedIn, (req, res) => {
     res.set('Content-Disposition', 'attachment; filename="roamly-personal-data.json"');
-    res.json({ ...payload(req.userId), fuelRecords: entities(req.userId, 'fuelRecords'), exportedAt: new Date().toISOString() });
+    res.json({ ...payload(req.userId), security: security.metadata(req.userId), fuelRecords: entities(req.userId, 'fuelRecords'), exportedAt: new Date().toISOString() });
   });
-  app.delete('/api/account', signedIn, (req, res) => {
+  app.delete('/api/account', signedIn, async (req, res) => {
+    const user = db.prepare('SELECT is_guest FROM users WHERE id=?').get(req.userId);
+    if (!user.is_guest) await requireDestructiveAuth(req);
     db.prepare('DELETE FROM users WHERE id=?').run(req.userId);
     res.clearCookie(COOKIE, { httpOnly: true, sameSite: 'lax', secure: production, path: '/' });
     res.json({ ok: true });

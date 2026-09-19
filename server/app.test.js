@@ -8,7 +8,9 @@ import { createApp } from './app.js';
 import { createProviders, estimateFuel } from './providers.js';
 
 async function setup(t, options = {}) {
-  const service = createApp({ dbPath: ':memory:', logErrors: false, ...options });
+  // These original CRUD tests focus on account ownership. The mandatory email
+  // flow is exercised end to end by email-auth.test.js without this fixture flag.
+  const service = createApp({ dbPath: ':memory:', logErrors: false, emailVerificationRequired: false, resendApiKey: '', authEmailFrom: '', ...options });
   const server = service.app.listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(async () => { await new Promise((resolve) => server.close(resolve)); service.close(); });

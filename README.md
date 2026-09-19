@@ -27,7 +27,12 @@ Run the build before `npm start`. `npm run preview` previews only the frontend b
 
 - `src/`: React and TypeScript views, a curated Kerala destination catalogue, and deterministic planning and calculation logic.
 - `src/components/DestinationMap.tsx`: Leaflet map with OpenStreetMap tiles, keyboard-accessible destination markers, visible attribution, and a tile-loading fallback. No device location is requested.
-- `server/`: Express API backed by SQLite at `.data/roamly.sqlite`, local account/session handling, user-owned application records, and replaceable external-provider boundaries. Tests use isolated databases.
+- `server/`: the local Express/SQLite development API used while the Supabase migration is in progress. Tests use isolated databases.
+- `supabase/`: database migration for the hosted beta, including Row Level Security policies.
+
+## Hosted beta
+
+The target hosted stack is **Supabase + Cloudflare Pages**. See [the deployment guide](docs/SUPABASE_CLOUDFLARE.md) for the database migration, authentication setup, and Pages settings.
 - `server/providers.js`: a provider contract that reports unavailable integrations explicitly. Keep future provider credentials on the server.
 
 The architecture remains extensible beyond Kerala and India: profiles and trips keep explicit country and currency fields, maps use global coordinates, and service adapters can be replaced. Additional regions, translated interfaces, reliable local information, and currency conversion require further implementation and validation rather than a change to the launch scope.
