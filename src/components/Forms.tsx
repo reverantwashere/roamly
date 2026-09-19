@@ -20,6 +20,7 @@ import Modal from "./Modal";
 import { destinations, keralaHometowns, type Destination } from "../lib/data";
 import { buildItinerary, fuelCost } from "../lib/planner";
 import { supabase } from "../lib/supabase";
+import { EMAIL_OTP_PATTERN, emailVerificationToken } from "../lib/emailOtp";
 import { normalizePersonality } from "../lib/preferences";
 import {
   api,
@@ -91,7 +92,7 @@ export function AuthModal({
         email: pendingEmail,
       });
       if (error) throw error;
-      setNotice("A new six-digit code is on its way.");
+      setNotice("A new verification code is on its way.");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -142,9 +143,7 @@ export function AuthModal({
       } else if (mode === "verify") {
         if (!supabase || !pendingEmail)
           throw new Error("Start your signup again to request a new code.");
-        const token = String(data.token || "").replace(/\D/g, "");
-        if (token.length !== 6)
-          throw new Error("Enter the six-digit code from your email.");
+        const token = emailVerificationToken(String(data.token || ""));
         const { error } = await supabase.auth.verifyOtp({
           email: pendingEmail,
           token,
@@ -166,7 +165,7 @@ export function AuthModal({
           if (error) throw error;
           if (!signedUp.session) {
             setPendingEmail(email);
-            setNotice("We sent a six-digit verification code to your email.");
+            setNotice("We sent a verification code to your email.");
             setMode("verify");
           } else {
             onSuccess(await api<Session>("/session"));
@@ -200,7 +199,7 @@ export function AuthModal({
         mode === "signup"
           ? "Create your Roamly account and keep your journeys together."
           : mode === "verify"
-            ? `Enter the six-digit code sent to ${pendingEmail}.`
+            ? `Enter the verification code sent to ${pendingEmail}.`
           : mode === "login"
             ? "Your next journey is right where you left it."
             : "Secure access to your travel space."
@@ -268,10 +267,12 @@ export function AuthModal({
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
-              placeholder="000000"
+              placeholder="Code from your email"
               minLength={6}
-              maxLength={6}
-              pattern="[0-9]{6}"
+              pattern={EMAIL_OTP_PATTERN}
+              onInput={(event) => {
+                event.currentTarget.value = event.currentTarget.value.replace(/\s/g, "");
+              }}
               required
               autoFocus
             />
