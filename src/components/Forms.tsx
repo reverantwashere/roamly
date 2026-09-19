@@ -81,7 +81,6 @@ export function AuthModal({
         if (!supabase) {
           const result = await api<Session>(`/auth/${mode}`, data);
           onSuccess(result);
-          onClose();
         } else if (mode === "signup") {
           const { data: signedUp, error } = await supabase.auth.signUp({
             email: String(data.email), password: String(data.password),
@@ -92,12 +91,12 @@ export function AuthModal({
             setNotice("Check your email to confirm your Roamly account, then sign in.");
             setMode("login");
           } else {
-            onSuccess(await api<Session>("/session")); onClose();
+            onSuccess(await api<Session>("/session"));
           }
         } else {
           const { error } = await supabase.auth.signInWithPassword({ email: String(data.email), password: String(data.password) });
           if (error) throw error;
-          onSuccess(await api<Session>("/session")); onClose();
+          onSuccess(await api<Session>("/session"));
         }
       }
     } catch (err) {
@@ -272,6 +271,46 @@ export function AuthModal({
         <ShieldCheck size={14} />
         Your profile is private by default.
       </p>
+    </Modal>
+  );
+}
+
+export function OnboardingModal({
+  profile,
+  onComplete,
+}: {
+  profile: Profile;
+  onComplete: () => Promise<void>;
+}) {
+  const [step, setStep] = useState(1);
+  const [personality, setPersonality] = useState(profile.personality || "Peace-seeking");
+  const [interests, setInterests] = useState<string[]>(profile.interests || ["Nature"]);
+  const [group, setGroup] = useState(profile.group || "Solo");
+  const [transport, setTransport] = useState(profile.transport || "Car");
+  const [budget, setBudget] = useState(profile.budget || "Balanced");
+  const [city, setCity] = useState(profile.city || "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const choices = (items: string[], value: string, setValue: (v: string) => void) => (
+    <div className="onboarding-choices">
+      {items.map((item) => <button type="button" key={item} className={value === item ? "selected" : ""} onClick={() => setValue(item)} aria-pressed={value === item}>{value === item && <Check size={14} />}{item}</button>)}
+    </div>
+  );
+  async function finish() {
+    setBusy(true); setError("");
+    try {
+      await api("/profile", { ...profile, city, country: profile.country || "India", personality, interests, group, transport, budget, currency: profile.currency || "INR" }, "PUT");
+      await onComplete();
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+  return (
+    <Modal title="Make Roamly yours." subtitle={`A few quick choices so every suggestion feels more like you. Step ${step} of 3.`} onClose={() => {}} wide>
+      <div className="onboarding-progress"><span className={step >= 1 ? "active" : ""} /><span className={step >= 2 ? "active" : ""} /><span className={step >= 3 ? "active" : ""} /></div>
+      {step === 1 && <div className="onboarding-step"><h3>What kind of journey feels right?</h3><p>Pick the pace you reach for most often.</p>{choices(["Peace-seeking", "Adventure-seeking", "A thoughtful mix", "Lively and social", "Flexible"], personality, setPersonality)}<label>Home city<input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Kochi" maxLength={100} /></label></div>}
+      {step === 2 && <div className="onboarding-step"><h3>What draws you in?</h3><p>Choose as many as you like.</p><div className="onboarding-choices">{["Nature", "Adventure", "Culture", "Food", "Coast", "Photography", "Wellness", "Wildlife"].map((item) => <button type="button" key={item} className={interests.includes(item) ? "selected" : ""} onClick={() => setInterests((v) => v.includes(item) ? v.filter((x) => x !== item) : [...v, item])}>{interests.includes(item) && <Check size={14} />}{item}</button>)}</div></div>}
+      {step === 3 && <div className="onboarding-step"><h3>How do you usually travel?</h3><p>We’ll shape practical suggestions around this.</p><label>Usually travelling with{choices(["Solo", "Couple", "Family", "Friends", "Group"], group, setGroup)}</label><label>Preferred transport{choices(["Car", "Motorcycle", "Public transport", "Walking", "Mixed"], transport, setTransport)}</label><label>Budget style{choices(["Budget", "Balanced", "Comfort", "Luxury"], budget, setBudget)}</label></div>}
+      <ErrorMessage error={error} />
+      <div className="modal-actions onboarding-actions">{step > 1 && <button className="button secondary" onClick={() => setStep(step - 1)}>Back</button>}<button className="button primary" disabled={busy || (step === 2 && !interests.length)} onClick={() => step < 3 ? setStep(step + 1) : finish()}>{busy ? <LoaderCircle className="spin" size={17} /> : step === 3 ? "Start exploring" : "Continue"}<ArrowRight size={16} /></button></div>
     </Modal>
   );
 }

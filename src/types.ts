@@ -111,6 +111,17 @@ export async function api<T = any>(
       trips: [], vehicles: [], expenses: [], savedPlaces: [],
     } as T;
   }
+  if (supabase && path === "/profile" && (method === "PUT" || body)) {
+    const { data: auth, error: authError } = await supabase.auth.getUser();
+    if (authError || !auth.user) throw new Error("Please sign in to save your preferences.");
+    const { data: current } = await supabase.from("profiles").select("profile").eq("id", auth.user.id).maybeSingle();
+    const input = (body || {}) as Record<string, unknown>;
+    const name = String(input.name || auth.user.user_metadata.name || "Traveller");
+    const profile = { ...(current?.profile || {}), ...input, name, onboarded: true };
+    const { error } = await supabase.from("profiles").upsert({ id: auth.user.id, name, profile });
+    if (error) throw error;
+    return { profile } as T;
+  }
   const res = await fetch(`/api${path}`, {
     method: method || (body ? "POST" : "GET"),
     credentials: "same-origin",
