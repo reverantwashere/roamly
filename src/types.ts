@@ -1,4 +1,5 @@
 import type { ItineraryDay } from "./lib/planner";
+import { supabase } from "./lib/supabase";
 export interface Profile {
   name: string;
   city: string;
@@ -86,6 +87,30 @@ export async function api<T = any>(
   body?: unknown,
   method?: string,
 ): Promise<T> {
+  // Cloudflare Pages is a static host. Until a user signs in, provide the
+  // same read-only Kerala starter space without asking a nonexistent /api
+  // server for a local SQLite session.
+  if (supabase && path === "/session") {
+    const { data } = await supabase.auth.getUser();
+    const user = data.user;
+    if (!user) {
+      return {
+        user: { id: "guest", name: "Traveller", email: "", isGuest: true },
+        profile: {
+          name: "Traveller", city: "Kochi", country: "India", currency: "INR",
+          personality: "Peace-seeking", interests: ["Nature", "Culture"], group: "Couple",
+          transport: "Car", budget: "Balanced", language: "English", notifications: {}, visibility: "Private",
+        },
+        trips: [], vehicles: [], expenses: [], savedPlaces: [],
+      } as T;
+    }
+    const { data: row } = await supabase.from("profiles").select("name, profile").eq("id", user.id).maybeSingle();
+    return {
+      user: { id: user.id, name: row?.name || user.user_metadata.name || "Traveller", email: user.email || "", isGuest: false },
+      profile: { name: row?.name || user.user_metadata.name || "Traveller", city: "Kochi", country: "India", currency: "INR", personality: "Peace-seeking", interests: ["Nature", "Culture"], group: "Couple", transport: "Car", budget: "Balanced", language: "English", notifications: {}, visibility: "Private", ...(row?.profile || {}) },
+      trips: [], vehicles: [], expenses: [], savedPlaces: [],
+    } as T;
+  }
   const res = await fetch(`/api${path}`, {
     method: method || (body ? "POST" : "GET"),
     credentials: "same-origin",
