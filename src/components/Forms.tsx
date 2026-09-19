@@ -36,20 +36,44 @@ export function ErrorMessage({ error }: { error: string }) {
     </p>
   ) : null;
 }
+export type AuthMode = "signup" | "verify" | "login" | "forgot" | "reset";
+
+function recoveryRedirectUrl() {
+  const url = new URL(window.location.origin);
+  url.searchParams.set("recovery", "password");
+  return url.toString();
+}
+
+function authErrorMessage(error: unknown, mode: AuthMode) {
+  const message = error instanceof Error ? error.message : "Something went wrong. Please try again.";
+  const status = typeof error === "object" && error && "status" in error
+    ? Number((error as { status?: unknown }).status)
+    : 0;
+  if (
+    mode === "forgot" &&
+    (status === 429 || /rate.?limit|sending recovery email/i.test(message))
+  ) {
+    return "Roamly couldn't send that email right now. The email service may have reached its sending limit; please try again later.";
+  }
+  return message;
+}
+
 export function AuthModal({
   onClose,
   onSuccess,
+  initialMode,
 }: {
   onClose: () => void;
   onSuccess: (s: Session) => void;
+  initialMode?: AuthMode;
 }) {
-  const [mode, setMode] = useState<
-    "signup" | "verify" | "login" | "forgot" | "reset"
-  >(
-    new URLSearchParams(window.location.search).has("resetToken")
+  const [mode, setMode] = useState<AuthMode>(() => {
+    if (initialMode) return initialMode;
+    const params = new URLSearchParams(window.location.search);
+    return params.has("resetToken") || params.get("recovery") === "password"
       ? "reset"
-      : "signup",
-  );
+      : "signup";
+  });
   const [pendingEmail, setPendingEmail] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -82,7 +106,10 @@ export function AuthModal({
     try {
       if (mode === "forgot") {
         if (supabase) {
-          const { error } = await supabase.auth.resetPasswordForEmail(String(data.email), { redirectTo: window.location.origin });
+          const { error } = await supabase.auth.resetPasswordForEmail(
+            String(data.email).trim().toLowerCase(),
+            { redirectTo: recoveryRedirectUrl() },
+          );
           if (error) throw error;
           setNotice("If that account exists, password reset instructions are on their way.");
         } else {
@@ -90,11 +117,24 @@ export function AuthModal({
           setNotice(result.message || "If that account exists, reset instructions have been prepared.");
         }
       } else if (mode === "reset") {
-        if (!supabase) throw new Error("Authentication is still being configured.");
-        const { error } = await supabase.auth.updateUser({ password: String(data.password) });
-        if (error) throw error;
+        if (supabase) {
+          const { data: current } = await supabase.auth.getSession();
+          if (!current.session) {
+            throw new Error("Open the newest password-reset link from your email, then try again.");
+          }
+          const { error } = await supabase.auth.updateUser({
+            password: String(data.password),
+          });
+          if (error) throw error;
+          await supabase.auth.signOut({ scope: "local" });
+        } else {
+          await api("/auth/reset-password", data);
+        }
         const cleanUrl = new URL(window.location.href);
         cleanUrl.searchParams.delete("resetToken");
+        cleanUrl.searchParams.delete("recovery");
+        cleanUrl.searchParams.delete("code");
+        cleanUrl.hash = "";
         window.history.replaceState({}, "", cleanUrl);
         setMode("login");
         setNotice("Password updated. Sign in with your new password.");
@@ -137,7 +177,7 @@ export function AuthModal({
         }
       }
     } catch (err) {
-      setError((err as Error).message);
+      setError(authErrorMessage(err, mode));
     } finally {
       setBusy(false);
     }
@@ -236,7 +276,7 @@ export function AuthModal({
             />
           </label>
         )}
-        {mode === "reset" && (
+        {mode === "reset" && !supabase && (
           <label>
             Reset token
             <input
@@ -329,7 +369,7 @@ export function AuthModal({
             </button>
           </>
         )}
-        {mode === "forgot" && (
+        {mode === "forgot" && !supabase && (
           <button
             type="button"
             className="text-button"

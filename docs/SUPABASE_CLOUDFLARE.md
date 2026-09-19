@@ -20,6 +20,10 @@ In **Authentication → Emails → Templates → Confirm sign up**:
 
 The `{{ .Token }}` variable in that template is required. It replaces the confirmation link with the six-digit code that Roamly verifies in the signup dialog. For public beta delivery, configure custom SMTP; Supabase's default sender is intended only for testing and restricts recipients and send volume.
 
+In **Authentication → Emails → Templates → Reset password**, set the subject to `Reset your Roamly password` and paste the contents of [`supabase/templates/recovery.html`](../supabase/templates/recovery.html). The template must keep `{{ .ConfirmationURL }}` so the link creates the temporary recovery session used by the new-password screen.
+
+Supabase's built-in sender is limited to two authentication emails per hour across signup, resend, and password recovery. A rate-limit or generic recovery-email failure therefore requires waiting for the quota to refill or configuring custom SMTP under **Authentication → Emails → SMTP Settings**.
+
 For the beta, the default second factor should be email confirmation. Supabase also supports optional authenticator-app (TOTP) MFA.
 
 Roamly can store an optional mobile number as private profile information. It does not send a verification message, so the Supabase Phone provider and an external SMS provider are not required.
