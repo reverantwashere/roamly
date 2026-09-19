@@ -17,6 +17,7 @@ export interface ItineraryActivity {
 export interface ItineraryDay {
   day: number;
   title: string;
+  note?: string;
   activities: ItineraryActivity[];
 }
 
@@ -24,7 +25,15 @@ type Landmark = {
   title: string;
   description: string;
   style: "quiet" | "active" | "social";
+  period?: "morning" | "midday" | "evening";
+  /** Time reserved for an outing, including its local travel and check-in. */
+  durationHours?: number;
 };
+
+const plan = (
+  ...items: [string, string, Landmark["style"], Pick<Landmark, "period" | "durationHours">?][]
+): Landmark[] =>
+  items.map(([title, description, style, timing]) => ({ title, description, style, ...timing }));
 
 const landmarkPlans: Record<string, Landmark[]> = {
   munnar: [
@@ -44,6 +53,7 @@ const landmarkPlans: Record<string, Landmark[]> = {
       title: "Munnar town",
       description: "Browse local shops and settle into an unhurried lunch.",
       style: "social",
+      period: "midday",
     },
     {
       title: "Mattupetty waterside",
@@ -61,6 +71,7 @@ const landmarkPlans: Record<string, Landmark[]> = {
       title: "Munnar local market",
       description: "Make room for local food and a relaxed evening in town.",
       style: "social",
+      period: "evening",
     },
   ],
   wayanad: [
@@ -80,6 +91,7 @@ const landmarkPlans: Record<string, Landmark[]> = {
       title: "Kalpetta town",
       description: "Explore local shops and find a comfortable lunch stop.",
       style: "social",
+      period: "midday",
     },
     {
       title: "Lakkidi viewpoint",
@@ -149,6 +161,7 @@ const landmarkPlans: Record<string, Landmark[]> = {
       title: "Alappuzha town",
       description: "Discover local food and leave time for a relaxed lunch.",
       style: "social",
+      period: "midday",
     },
     {
       title: "Kuttanad village scenery",
@@ -222,6 +235,7 @@ const landmarkPlans: Record<string, Landmark[]> = {
       title: "Kumily town",
       description: "Browse spice shops and enjoy a relaxed local lunch.",
       style: "social",
+      period: "midday",
     },
     {
       title: "Spice garden visit",
@@ -239,6 +253,7 @@ const landmarkPlans: Record<string, Landmark[]> = {
       title: "Kumily evening",
       description: "Leave time for local food and an unhurried evening.",
       style: "social",
+      period: "evening",
     },
   ],
   vagamon: [
@@ -293,6 +308,7 @@ const landmarkPlans: Record<string, Landmark[]> = {
       title: "Athirappilly local lunch",
       description: "Choose a nearby meal stop and take an unhurried break.",
       style: "social",
+      period: "midday",
     },
     {
       title: "Chalakudy river scenery",
@@ -347,8 +363,93 @@ const landmarkPlans: Record<string, Landmark[]> = {
       title: "Kumarakom local lunch",
       description: "Make room for a relaxed meal and conversation.",
       style: "social",
+      period: "midday",
     },
   ],
+  kovalam: plan(
+    ["Kovalam lighthouse surroundings", "Walk through public coastal areas and confirm lighthouse access before visiting.", "active"],
+    ["Lighthouse Beach", "Enjoy the shore while following local lifeguard and sea-condition advice.", "social"],
+    ["Hawa Beach promenade", "Take an unhurried coastal walk from public access points.", "quiet"],
+    ["Vizhinjam harbour viewpoints", "Explore permitted viewpoints without entering working harbour areas.", "active"],
+    ["Kovalam café break", "Choose a local café and leave time for a relaxed meal.", "social"],
+    ["Coastal sunset pause", "Find a safe public viewpoint and allow the evening to move slowly.", "quiet", { period: "evening" }],
+  ),
+  ponmudi: plan(
+    ["Ponmudi hill viewpoints", "Pause at designated viewpoints and check current road and weather conditions.", "quiet"],
+    ["Hill trail option", "Choose an authorised trail suitable for your group after checking access and fitness needs.", "active"],
+    ["Ponmudi rest stop", "Make room for a simple meal and a comfortable break.", "social"],
+    ["Kallar river surroundings", "Enjoy permitted riverside areas and avoid entering the water when conditions are uncertain.", "quiet"],
+    ["Golden Valley surroundings", "Confirm local access and follow all safety notices before setting out.", "active"],
+    ["Hill-road tea stop", "Pause at a local shop on the return journey.", "social"],
+  ),
+  thenmala: plan(
+    ["Thenmala reservoir viewpoints", "Enjoy reservoir scenery from public and designated viewing areas.", "quiet"],
+    ["Thenmala eco-tourism zone", "Check the official activity schedule, access rules, and fitness requirements.", "active"],
+    ["Thenmala town", "Choose a local lunch stop and browse at a relaxed pace.", "social", { period: "midday" }],
+    ["Forest-edge scenery", "Take a quiet pause without entering restricted forest areas.", "quiet"],
+    ["Leisure-zone walk", "Confirm opening status and choose a route that suits your group.", "active"],
+    ["Local evening stop", "Leave time for refreshments before the return journey.", "social", { period: "evening" }],
+  ),
+  gavi: plan(
+    ["Gavi Lake surroundings", "Use authorised access only and follow all forest department guidance.", "quiet"],
+    ["KFDC guided nature walk", "Confirm the official programme, permits, reporting time and fitness requirements with the operator.", "active", { period: "morning", durationHours: 4 }],
+    ["Gavi meal stop", "Confirm meal arrangements before travelling to this remote area.", "social"],
+    ["Kochupamba Lake option", "Confirm the official programme and permitted lake access while respecting wildlife and restricted zones.", "quiet"],
+    ["Sabarimala viewpoint", "Ask your authorised Gavi guide whether the viewpoint is included and accessible in your confirmed programme.", "active"],
+    ["Shared lodge evening", "Plan a restful evening around confirmed accommodation arrangements.", "social", { period: "evening" }],
+  ),
+  marari: plan(
+    ["Marari Beach morning", "Walk the public shoreline and follow local sea-condition advice.", "quiet", { period: "morning" }],
+    ["Village cycling option", "Choose public roads and a comfortable route after checking traffic and weather.", "active"],
+    ["Mararikulam meal stop", "Try a local meal and take an unhurried break.", "social"],
+    ["Coastal village walk", "Explore respectfully and protect residents’ privacy.", "quiet"],
+    ["Beach sunset outing", "Use public access points and stay clear of unsafe water conditions.", "active", { period: "evening" }],
+    ["Local café evening", "Leave room for refreshments and conversation.", "social", { period: "evening" }],
+  ),
+  bekal: plan(
+    ["Bekal Fort surroundings", "Explore the public fort area after confirming current admission and access.", "active"],
+    ["Bekal Beach", "Enjoy the coast from public areas and follow local sea-condition advice.", "quiet"],
+    ["Bekal local lunch", "Choose a nearby restaurant for an unhurried meal.", "social", { period: "midday" }],
+    ["Fort-side sunset view", "Find a permitted viewpoint and allow extra time for the evening light.", "quiet", { period: "evening" }],
+    ["Kappil coastal scenery", "Check local access and road conditions before taking a scenic detour.", "active"],
+    ["Kasaragod food stop", "Add a town stop for regional food on the outward or return journey.", "social"],
+  ),
+  muzhappilangad: plan(
+    ["Muzhappilangad Beach", "Check tide, access, and local driving rules before entering any permitted beach-driving area.", "active"],
+    ["Coastal morning walk", "Enjoy the public shoreline before the busier part of the day.", "quiet", { period: "morning" }],
+    ["Thalassery food stop", "Pair the coast with a relaxed regional meal.", "social"],
+    ["Dharmadam coastal views", "Use public viewpoints and confirm local access conditions.", "quiet"],
+    ["Sunset beach outing", "Follow all posted safety guidance and keep clear of unsafe water.", "active", { period: "evening" }],
+    ["Local snack break", "Make room for tea and a shared snack on the return journey.", "social"],
+  ),
+  "silent-valley": plan(
+    ["Sairandhri guided excursion", "Reserve the morning and early afternoon for the official excursion from Mukkali, including its permitted viewpoints. Confirm reporting time, permits, transport and duration with the reserve before travelling.", "active", { period: "morning", durationHours: 6 }],
+    ["Mannarkkad return stop", "Leave time for a meal and the return journey after your reserve visit.", "social", { period: "evening" }],
+  ),
+  "kozhikode-city": plan(
+    ["Kozhikode Beach promenade", "Take a relaxed public waterfront walk and follow local sea-condition advice.", "quiet"],
+    ["SM Street", "Explore the pedestrian shopping area at a comfortable pace.", "active"],
+    ["Malabar food trail", "Choose a few regional dishes and leave room for something sweet.", "social"],
+    ["Mananchira surroundings", "Pause around the public square and nearby heritage streets.", "quiet"],
+    ["City heritage walk", "Link central landmarks using public streets and confirm access before entering sites.", "active"],
+    ["Evening café stop", "Settle into a café after exploring the city centre.", "social", { period: "evening" }],
+  ),
+  "thrissur-city": plan(
+    ["Thekkinkadu Maidan surroundings", "Walk through public central areas while respecting event restrictions.", "quiet"],
+    ["Thrissur heritage circuit", "Connect central cultural landmarks and confirm entry arrangements.", "active"],
+    ["Traditional Kerala lunch", "Choose a city restaurant for an unhurried regional meal.", "social", { period: "midday" }],
+    ["Swaraj Round evening", "Take a relaxed central-city walk using safe pedestrian routes.", "quiet", { period: "evening" }],
+    ["Shakthan Thampuran Palace", "Explore the palace museum after confirming its current hours, closing days and admission.", "active", { period: "midday" }],
+    ["Thrissur market streets", "Browse local shops and pause for tea.", "social"],
+  ),
+  "kochi-city": plan(
+    ["Marine Drive promenade", "Enjoy a public waterfront walk at a comfortable pace.", "quiet"],
+    ["Broadway market", "Browse the market streets near Marine Drive and allow time for the busy shopping area.", "active"],
+    ["Ernakulam food stop", "Choose a local restaurant or café for a shared meal.", "social"],
+    ["Subhash Park surroundings", "Take a quiet pause in public green space after checking current access.", "quiet"],
+    ["MG Road shopping", "Pick a few stops along the shopping street and allow for traffic and travel time.", "active"],
+    ["Waterfront evening", "Leave time for conversation and city views from a public area.", "social", { period: "evening" }],
+  ),
 };
 
 function finiteNonNegative(value: number, label: string): void {
@@ -403,6 +504,7 @@ export function splitExpense(amount: number, people: number): number {
  * group activity/meal budget allocations, not admission or booking prices, and
  * exclude accommodation and travel to the destination.
  * Times and crowd levels are suggestions; check local access before travelling.
+ * Curated stops are used once. Longer stays retain open days for the user to plan.
  */
 export function buildItinerary(
   destination: Destination,
@@ -500,14 +602,34 @@ export function buildItinerary(
             "Your kind of adventure",
           ];
 
-  return Array.from({ length: days }, (_, dayIndex) => ({
-    day: dayIndex + 1,
-    title: titles[dayIndex % titles.length],
-    activities: windows.map<ItineraryActivity>((time, slot) => {
-      const landmark =
-        ordered[(dayIndex * windows.length + slot) % ordered.length];
+  const remaining = [...ordered];
+  return Array.from({ length: days }, (_, dayIndex): ItineraryDay => {
+    const activities: ItineraryActivity[] = [];
+    let availableAfter = 0;
+    windows.forEach((suggestedTime, slot) => {
+      // Do not let preference sorting move a morning excursion to the evening,
+      // or schedule a sunset visit at breakfast. Morning-only outings go first.
+      const morningIndex = slot === 0
+        ? remaining.findIndex((landmark) => landmark.period === "morning")
+        : -1;
+      const index = morningIndex >= 0 ? morningIndex : remaining.findIndex((landmark) =>
+        landmark.period === "morning" ? slot === 0
+          : landmark.period === "midday" ? slot === 1
+          : landmark.period === "evening" ? slot === windows.length - 1
+            : true,
+      );
+      if (index < 0) return;
+      const landmark = remaining[index];
+      const time = landmark.period === "evening" && suggestedTime < "17:00"
+        ? "17:00"
+        : suggestedTime;
+      const [hours, minutes] = time.split(":").map(Number);
+      const startHour = hours + minutes / 60;
+      if (startHour < availableAfter) return;
+      remaining.splice(index, 1);
+      availableAfter = startHour + (landmark.durationHours ?? 0);
       const allowanceShare = [0.12, 0.2, 0.18][slot];
-      return {
+      activities.push({
         time,
         title: landmark.title,
         description: [
@@ -529,7 +651,15 @@ export function buildItinerary(
               ? "Moderate"
               : destination.crowd,
         provenance: "Estimated",
-      };
-    }),
-  }));
+      });
+    });
+    return {
+      day: dayIndex + 1,
+      title: activities.length ? titles[dayIndex % titles.length] : "A day to make your own",
+      ...(activities.length === 0 ? {
+        note: "Roamly has no further curated stops for this stay. Keep this day flexible and confirm any extra visits locally.",
+      } : {}),
+      activities,
+    };
+  });
 }

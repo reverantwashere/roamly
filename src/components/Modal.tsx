@@ -6,12 +6,14 @@ export default function Modal({
   children,
   onClose,
   wide = false,
+  dismissible = true,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  dismissible?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -25,10 +27,10 @@ export default function Modal({
     const node = ref.current;
     node?.focus();
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Escape" && dismissible) onCloseRef.current();
       if (e.key === "Tab") {
         const focusables = node?.querySelectorAll<HTMLElement>(
-          "button:not(:disabled),input,select,textarea,a[href]",
+          "button:not(:disabled),input:not(:disabled):not([type=hidden]),select:not(:disabled),textarea:not(:disabled),a[href]",
         );
         if (!focusables?.length) return;
         const first = focusables[0],
@@ -51,12 +53,12 @@ export default function Modal({
       document.removeEventListener("keydown", key);
       previous?.focus();
     };
-  }, []);
+  }, [dismissible]);
   return (
     <div
       className="modal-overlay"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (dismissible && e.target === e.currentTarget) onClose();
       }}
     >
       <div
@@ -72,13 +74,13 @@ export default function Modal({
             <h2 id="modal-title">{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <button
+          {dismissible && <button
             className="icon-button"
             aria-label="Close dialog"
             onClick={onClose}
           >
             <X size={21} />
-          </button>
+          </button>}
         </div>
         {children}
       </div>

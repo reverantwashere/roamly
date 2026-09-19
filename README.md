@@ -27,8 +27,9 @@ Run the build before `npm start`. `npm run preview` previews only the frontend b
 
 - `src/`: React and TypeScript views, a curated Kerala destination catalogue, and deterministic planning and calculation logic.
 - `src/components/DestinationMap.tsx`: Leaflet map with OpenStreetMap tiles, keyboard-accessible destination markers, visible attribution, and a tile-loading fallback. No device location is requested.
-- `server/`: the local Express/SQLite development API used while the Supabase migration is in progress. Tests use isolated databases.
-- `supabase/`: database migration for the hosted beta, including Row Level Security policies.
+- `server/`: the local Express/SQLite development API. Tests use isolated databases.
+- `src/lib/hostedApi.ts`: the hosted Supabase adapter for profiles, trips, vehicles, expenses, fuel records, saved places, and account export/deletion.
+- `supabase/`: database migrations for the hosted beta, including Row Level Security policies and transactional functions for related updates.
 
 ## Hosted beta
 
@@ -37,7 +38,9 @@ The target hosted stack is **Supabase + Cloudflare Pages**. See [the deployment 
 
 The architecture remains extensible beyond Kerala and India: profiles and trips keep explicit country and currency fields, maps use global coordinates, and service adapters can be replaced. Additional regions, translated interfaces, reliable local information, and currency conversion require further implementation and validation rather than a change to the launch scope.
 
-Each guest receives separate example records. Creating an account retains that guest's records. Passwords use scrypt; opaque sessions are stored as hashes and sent in HttpOnly, SameSite cookies. Data is scoped to the current account. Development password resets write to `.data/mail-outbox`; no email is sent, and production reset delivery remains unavailable.
+The hosted site lets guests browse the catalogue and asks them to sign in before saving personal data. Supabase manages authentication, email signup codes, password recovery, and owner-only database access. Email delivery depends on the project's SMTP configuration.
+
+The local Express demo uses separate guest example records and retains them when a local account is created. Its passwords use scrypt; opaque sessions are stored as hashes and sent in HttpOnly, SameSite cookies. Local development password resets write to `.data/mail-outbox` instead of sending email. These local accounts and records are separate from Supabase.
 
 The server listens on `127.0.0.1:3001` by default. `PORT` changes the port; `APP_ORIGIN` configures the trusted origin; `NODE_ENV=production` enables secure cookies and disables development reset delivery. Use HTTPS for a deployed production origin. The local application is designed for development and product evaluation; deployment requires production infrastructure and operational review.
 
@@ -53,6 +56,6 @@ Weather, traffic, currency exchange, opening hours, availability, and other live
 
 AI conversation, live travel intelligence, maintenance notifications, social matching, messaging, verification, moderation, and emergency services remain future work. The AI and social areas communicate that status.
 
-A hosted beta still needs a database migration and backup strategy, email recovery, HTTPS, provider integrations, monitoring, localization and user testing. A public social release additionally needs reporting, blocking, verification, moderation, and explicit location-sharing consent.
+Before a hosted release, apply all database migrations and verify email delivery, backups, monitoring, and deployed user flows. Provider integrations, localization, and further user testing remain future work. A public social release additionally needs reporting, blocking, verification, moderation, and explicit location-sharing consent.
 
 See [the Kerala beta plan](docs/KERALA_BETA.md) for the proposed pilot cohort, validation questions and release preparation.

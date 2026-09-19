@@ -1,5 +1,6 @@
 import type { ItineraryDay } from "./lib/planner";
 import { supabase } from "./lib/supabase";
+import { createHostedApi } from "./lib/hostedApi";
 export interface Profile {
   name: string;
   phone?: string;
@@ -83,46 +84,15 @@ export type Page =
   | "ai"
   | "saved"
   | "profile";
+
+const hostedApi = supabase ? createHostedApi(supabase) : null;
+
 export async function api<T = any>(
   path: string,
   body?: unknown,
   method?: string,
 ): Promise<T> {
-  // Cloudflare Pages is a static host. Until a user signs in, provide the
-  // same read-only Kerala starter space without asking a nonexistent /api
-  // server for a local SQLite session.
-  if (supabase && path === "/session") {
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
-    if (!user) {
-      return {
-        user: { id: "guest", name: "Traveller", email: "", isGuest: true },
-        profile: {
-          name: "Traveller", city: "Kochi", country: "India", currency: "INR",
-          personality: "Peace-seeking", interests: ["Nature", "Culture"], group: "Couple",
-          transport: "Car", budget: "Balanced", language: "English", notifications: {}, visibility: "Private",
-        },
-        trips: [], vehicles: [], expenses: [], savedPlaces: [],
-      } as T;
-    }
-    const { data: row } = await supabase.from("profiles").select("name, profile").eq("id", user.id).maybeSingle();
-    return {
-      user: { id: user.id, name: row?.name || user.user_metadata.name || "Traveller", email: user.email || "", isGuest: false },
-      profile: { name: row?.name || user.user_metadata.name || "Traveller", city: "Kochi", country: "India", currency: "INR", personality: "Peace-seeking", interests: ["Nature", "Culture"], group: "Couple", transport: "Car", budget: "Balanced", language: "English", notifications: {}, visibility: "Private", ...(row?.profile || {}) },
-      trips: [], vehicles: [], expenses: [], savedPlaces: [],
-    } as T;
-  }
-  if (supabase && path === "/profile" && (method === "PUT" || body)) {
-    const { data: auth, error: authError } = await supabase.auth.getUser();
-    if (authError || !auth.user) throw new Error("Please sign in to save your preferences.");
-    const { data: current } = await supabase.from("profiles").select("profile").eq("id", auth.user.id).maybeSingle();
-    const input = (body || {}) as Record<string, unknown>;
-    const name = String(input.name || auth.user.user_metadata.name || "Traveller");
-    const profile = { ...(current?.profile || {}), ...input, name, onboarded: true };
-    const { error } = await supabase.from("profiles").upsert({ id: auth.user.id, name, profile });
-    if (error) throw error;
-    return { profile } as T;
-  }
+  if (hostedApi) return hostedApi<T>(path, body, method);
   const res = await fetch(`/api${path}`, {
     method: method || (body ? "POST" : "GET"),
     credentials: "same-origin",

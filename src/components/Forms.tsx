@@ -20,6 +20,7 @@ import Modal from "./Modal";
 import { destinations, keralaHometowns, type Destination } from "../lib/data";
 import { buildItinerary, fuelCost } from "../lib/planner";
 import { supabase } from "../lib/supabase";
+import { normalizePersonality } from "../lib/preferences";
 import {
   api,
   currencies,
@@ -407,7 +408,7 @@ export function OnboardingModal({
   onComplete: () => Promise<void>;
 }) {
   const [step, setStep] = useState(1);
-  const [personality, setPersonality] = useState(profile.personality || "Peace-seeking");
+  const [personality, setPersonality] = useState(normalizePersonality(profile.personality));
   const [interests, setInterests] = useState<string[]>(profile.interests || ["Nature"]);
   const [group, setGroup] = useState(profile.group || "Solo");
   const [transport, setTransport] = useState(profile.transport || "Car");
@@ -430,9 +431,9 @@ export function OnboardingModal({
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   return (
-    <Modal title="Make Roamly yours." subtitle={`A few quick choices so every suggestion feels more like you. Step ${step} of 3.`} onClose={() => {}} wide>
+    <Modal title="Make Roamly yours." subtitle={`A few quick choices so every suggestion feels more like you. Step ${step} of 3.`} onClose={() => {}} dismissible={false} wide>
       <div className="onboarding-progress"><span className={step >= 1 ? "active" : ""} /><span className={step >= 2 ? "active" : ""} /><span className={step >= 3 ? "active" : ""} /></div>
-      {step === 1 && <div className="onboarding-step"><h3>What kind of journey feels right?</h3><p>Pick the pace you reach for most often.</p>{choices(["Peace-seeking", "Adventure-seeking", "A thoughtful mix", "Lively and social", "Flexible"], personality, setPersonality)}<label>Home city in Kerala<select value={city} onChange={(e) => setCity(e.target.value)} required><option value="" disabled>Select your hometown</option>{keralaHometowns.map(([name]) => <option key={name} value={name}>{name}</option>)}</select></label></div>}
+      {step === 1 && <div className="onboarding-step"><h3>What kind of journey feels right?</h3><p>Pick the pace you reach for most often.</p>{choices(["Peace-seeking", "Adventure-seeking", "Ambivert", "Extrovert", "Introvert", "Flexible"], personality, setPersonality)}<label>Home city in Kerala<select value={city} onChange={(e) => setCity(e.target.value)} required><option value="" disabled>Select your hometown</option>{keralaHometowns.map(([name]) => <option key={name} value={name}>{name}</option>)}</select></label></div>}
       {step === 2 && <div className="onboarding-step"><h3>What draws you in?</h3><p>Choose as many as you like.</p><div className="onboarding-choices">{["Nature", "Adventure", "Culture", "Food", "Coast", "Photography", "Wellness", "Wildlife"].map((item) => <button type="button" key={item} className={interests.includes(item) ? "selected" : ""} onClick={() => setInterests((v) => v.includes(item) ? v.filter((x) => x !== item) : [...v, item])}>{interests.includes(item) && <Check size={14} />}{item}</button>)}</div></div>}
       {step === 3 && <div className="onboarding-step"><h3>How do you usually travel?</h3><p>We’ll shape practical suggestions around this.</p><label>Usually travelling with{choices(["Solo", "Couple", "Family", "Friends", "Group"], group, setGroup)}</label><label>Preferred transport{choices(["Car", "Motorcycle", "Public transport", "Walking", "Mixed"], transport, setTransport)}</label><label>Budget style{choices(["Budget", "Balanced", "Comfort", "Luxury"], budget, setBudget)}</label></div>}
       <ErrorMessage error={error} />
@@ -461,7 +462,7 @@ export function PlannerModal({
   const [budget, setBudget] = useState(12000);
   const [currency, setCurrency] = useState(profile.currency || "INR");
   const [personality, setPersonality] = useState(
-    profile.personality || "Peace-seeking",
+    normalizePersonality(profile.personality),
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -832,6 +833,7 @@ export function PlannerModal({
                 </div>
                 <div>
                   <h4>{day.title}</h4>
+                  {day.note && <p className="data-note">{day.note}</p>}
                   {day.activities.map((a, i) => (
                     <p key={i}>
                       <time>{a.time}</time>
