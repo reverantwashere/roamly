@@ -1966,7 +1966,7 @@ function App() {
               </div>
               <div className="creator-grid">
                 <article className="creator-card panel">
-                  <div className="creator-monogram" aria-hidden="true">MF</div>
+                  <img className="creator-photo" src="/creators/Fadil.JPG" alt="Mohammed Fadil" />
                   <span className="eyebrow">CO-CREATOR</span>
                   <h2>Mohammed Fadil</h2>
                   <p>Fadil is a Computer Engineering student at Khalifa University and co-creator of Roamly, helping build a simpler and more personal way to explore Kerala.</p>
@@ -1975,7 +1975,7 @@ function App() {
                   </div>
                 </article>
                 <article className="creator-card panel">
-                  <div className="creator-monogram" aria-hidden="true">MA</div>
+                  <img className="creator-photo" src="/creators/Anas.jpg" alt="Mohammed Anas" />
                   <span className="eyebrow">CO-CREATOR</span>
                   <h2>Mohammed Anas</h2>
                   <p>Anas is a student at Nirmala College, motivational speaker, and content creator. As co-creator of Roamly, he brings a creative perspective and a passion for connecting with people to the platform.</p>

@@ -4944,3 +4944,14 @@ label > small {
 .creator-links a:hover {
   text-decoration: underline;
 }
+
+.creator-photo {
+  width: 76px;
+  height: 76px;
+  display: block;
+  margin-bottom: 24px;
+  border-radius: 20px;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid var(--border-subtle, #e2e8d8);
+}
