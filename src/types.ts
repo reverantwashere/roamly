@@ -83,7 +83,8 @@ export type Page =
   | "social"
   | "ai"
   | "saved"
-  | "profile";
+  | "profile"
+  | "about";
 
 const hostedApi = supabase ? createHostedApi(supabase) : null;
 

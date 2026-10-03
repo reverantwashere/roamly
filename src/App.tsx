@@ -131,6 +131,7 @@ const navItems: {
   { id: "trips", label: "My trips", icon: MapIcon },
   { id: "vehicle", label: "My vehicle", icon: CarFront },
   { id: "expenses", label: "Expenses", icon: Wallet },
+  { id: "about", label: "About the creators", icon: Users },
   { id: "social", label: "Travel circle", icon: Users, soon: true },
   { id: "ai", label: "Roamly assistant", icon: Sparkles, soon: true },
 ];
@@ -160,6 +161,7 @@ const routedPages = new Set<Page>([
   "ai",
   "saved",
   "profile",
+  "about",
 ]);
 function pageFromLocation(): Page {
   const candidate = new URLSearchParams(window.location.search).get("page") as Page | null;
@@ -1952,6 +1954,40 @@ function App() {
                 )}
               </div>
             </>
+          )}
+          {page === "about" && (
+            <section className="about-creators-page">
+              <div className="page-heading about-heading">
+                <div>
+                  <span className="eyebrow">THE PEOPLE BEHIND ROAMLY</span>
+                  <h1>About the Creators</h1>
+                  <p>Two people, one shared idea: make exploring Kerala feel simpler, more personal, and more connected.</p>
+                </div>
+              </div>
+              <div className="creator-grid">
+                <article className="creator-card panel">
+                  <div className="creator-monogram" aria-hidden="true">MF</div>
+                  <span className="eyebrow">CO-CREATOR</span>
+                  <h2>Mohammed Fadil</h2>
+                  <p>Fadil is one of the creators of Roamly, helping shape the product from an idea into a travel companion built around the way people actually explore Kerala.</p>
+                </article>
+                <article className="creator-card panel">
+                  <div className="creator-monogram" aria-hidden="true">MA</div>
+                  <span className="eyebrow">CO-CREATOR</span>
+                  <h2>Mohammed Anas</h2>
+                  <p>Anas is one of the creators of Roamly, working to turn local travel ideas into a thoughtful experience that makes planning and discovering Kerala feel effortless.</p>
+                </article>
+              </div>
+              <section className="about-story panel">
+                <div className="section-icon sage"><Navigation size={19} /></div>
+                <div>
+                  <span className="eyebrow">WHY ROAMLY</span>
+                  <h2>Built for your next chapter.</h2>
+                  <p>Roamly started with a simple idea: exploring Kerala should feel personal, not overwhelming. We wanted one place where travellers could discover destinations, plan around their preferences, keep track of the practical details, and spend more time enjoying the journey.</p>
+                  <p>Roamly is our attempt to build that place, one chapter at a time.</p>
+                </div>
+              </section>
+            </section>
           )}
           {page === "profile" && !user.isGuest && (
             <ProfilePage
