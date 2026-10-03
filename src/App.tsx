@@ -1972,6 +1972,7 @@ function App() {
                   <p>Fadil is a Computer Engineering student at Khalifa University and co-creator of Roamly, helping build a simpler and more personal way to explore Kerala.</p>
                   <div className="creator-links">
                     <a href="https://www.linkedin.com/in/mohammedfadilk/" target="_blank" rel="noreferrer">LinkedIn <ArrowUpRight size={14} /></a>
+                    <a href="https://www.instagram.com/just_the_tech_nerd/" target="_blank" rel="noreferrer">Instagram <ArrowUpRight size={14} /></a>
                   </div>
                 </article>
                 <article className="creator-card panel">
@@ -1981,7 +1982,7 @@ function App() {
                   <p>Anas is a student at Nirmala College, motivational speaker, and content creator. As co-creator of Roamly, he brings a creative perspective and a passion for connecting with people to the platform.</p>
                   <div className="creator-links">
                     <a href="https://www.instagram.com/mohammedanas_99/" target="_blank" rel="noreferrer">Instagram <ArrowUpRight size={14} /></a>
-                    <a href="https://substack.com/@mohammedanas99" target="_blank" rel="noreferrer">Substack <ArrowUpRight size={14} /></a>
+                    <a href="https://www.linkedin.com/in/mohammed-anas-50a562325/" target="_blank" rel="noreferrer">LinkedIn <ArrowUpRight size={14} /></a>
                   </div>
                 </article>
               </div>
