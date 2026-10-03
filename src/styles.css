@@ -4924,3 +4924,23 @@ label > small {
     grid-template-columns: 1fr;
   }
 }
+
+.creator-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+.creator-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-accent, #5f7c4c);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: .02em;
+  text-decoration: none;
+}
+.creator-links a:hover {
+  text-decoration: underline;
+}
