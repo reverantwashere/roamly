@@ -1,0 +1,27 @@
+{
+  "name": "Roamly Development",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24",
+  "forwardPorts": [
+    5173,
+    3001
+  ],
+  "portsAttributes": {
+    "3001": {
+      "label": "Local API",
+      "onAutoForward": "silent"
+    },
+    "5173": {
+      "label": "Roamly Frontend",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "npm ci",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "GitHub.copilot",
+        "GitHub.copilot-chat"
+      ]
+    }
+  }
+}
