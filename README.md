@@ -6,24 +6,43 @@ The initial catalogue and example journeys focus on Kerala, with Indian rupee de
 
 Use the sun/moon button in the header to choose Light, Dark, or Device setting. Roamly follows the device setting on the first visit and remembers an explicit choice in this browser, including before the app loads. Theme preferences do not require an account.
 
-## Run locally
+## Development workflow
 
-Use Node.js 24 LTS and npm.
+Use Node.js 24 and npm.
+
+### Local machine
 
 ```sh
-npm install
+npm ci
 npm run dev
 ```
 
-Open [localhost:5173](http://localhost:5173). Vite serves the React app and forwards `/api` requests to the Express server on port 3001. Start in the example guest experience or create a local account.
+Open [localhost:5173](http://localhost:5173). Vite serves the React app and proxies `/api` requests to the Express server on port 3001. Start in the example guest experience or create a local account.
+
+Use this workflow while developing:
+
+1. Run `npm run dev` while implementing changes.
+2. Run `npm test` before opening or updating a pull request.
+3. Run `npm run build` before release-related changes or when validating hosted/frontend configuration.
+4. Use `npm start` only after `npm run build` to serve the built frontend and API together on port 3001.
+
+`npm run preview` serves only the frontend bundle and does not run the API server.
+
+### GitHub Codespaces
+
+Roamly includes a dev container at [`.devcontainer/devcontainer.json`](.devcontainer/devcontainer.json):
+
+- Uses the Node 24 JavaScript dev container image.
+- Runs `npm ci` automatically after the Codespace is created.
+- Forwards ports `5173` (frontend) and `3001` (API), with labels in the Ports panel.
+
+After opening the Codespace terminal, start development with:
 
 ```sh
-npm test          # Backend and travel-calculation tests
-npm run build    # Type-check and create dist/
-npm start        # Serve the built app and API on port 3001
+npm run dev
 ```
 
-Run the build before `npm start`. `npm run preview` previews only the frontend bundle; use `npm start` for the complete application.
+Then open the forwarded frontend port (`5173`) from the Ports panel.
 
 ## Architecture
 
