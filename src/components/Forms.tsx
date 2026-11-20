@@ -81,6 +81,22 @@ export function AuthModal({
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [show, setShow] = useState(false);
+  async function signInWithGoogle() {
+    if (!supabase || busy) return;
+    setError("");
+    setNotice("");
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin },
+      });
+      if (error) throw error;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in could not start. Please try again.");
+      setBusy(false);
+    }
+  }
   async function resendSignupCode() {
     if (!supabase || !pendingEmail) return;
     setError("");
@@ -232,6 +248,21 @@ export function AuthModal({
           >
             Sign in
           </button>
+        </div>
+      )}
+      {(mode === "signup" || mode === "login") && supabase && (
+        <div className="form-stack">
+          <button
+            type="button"
+            className="button full"
+            onClick={signInWithGoogle}
+            disabled={busy}
+          >
+            {busy ? <LoaderCircle className="spin" size={17} /> : null}
+            Continue with Google
+          </button>
+          <ErrorMessage error={error} />
+          <p className="auth-divider">or continue with email</p>
         </div>
       )}
       <form onSubmit={submit} className="form-stack">
