@@ -264,7 +264,7 @@ function App() {
         setAuthMode("reset");
         setModal("auth");
       }
-      if (event === "SIGNED_OUT" || event === "USER_UPDATED") {
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
         // Auth calls must run after Supabase releases the event callback lock.
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(() => { refresh().catch(() => {}); }, 0);
